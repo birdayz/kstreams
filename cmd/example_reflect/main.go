@@ -68,7 +68,8 @@ type MyProcessor struct{}
 
 func (p *MyProcessor) Process(ctx streamz.Context[string, string], k string, v string) error {
 	fmt.Println("LEEEEEEEEEEEL", k, v)
-	ctx.Forward(k, v)
+	v2 := v + "-modified"
+	ctx.Forward(k, v2)
 	return nil
 }
 
