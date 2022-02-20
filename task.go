@@ -1,6 +1,8 @@
 package streamz
 
-import "github.com/twmb/franz-go/pkg/kgo"
+import (
+	"github.com/twmb/franz-go/pkg/kgo"
+)
 
 type Task struct {
 	rootNode RecordProcessor // must be slice actually
