@@ -70,14 +70,3 @@ type TopicPartition struct {
 	Topic     string
 	Partition int32
 }
-
-// TBD: StreamThread: one per partition? one/configurable (like kstreams) ?, each has its own consumer?
-
-// TODO
-// Processor exists once per partition. Java design. Can we do better, or is it the best?
-
-func LinkSource[K, V, K2, V2 any](source *Source[K, V], firstProcessor *Processor[K, V, K2, V2]) {
-	source.forwardFunc = func(k K, v V) {
-		firstProcessor.Process(k, v)
-	}
-}
