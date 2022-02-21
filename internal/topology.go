@@ -1,4 +1,4 @@
-package streamz
+package internal
 
 import (
 	"errors"
@@ -8,10 +8,19 @@ import (
 
 type TopologyBuilder struct {
 	processors map[string]*TopologyProcessor
+
+	sources map[string]*TopologyProcessor
+}
+
+func (t *TopologyBuilder) GetTopics() []string {
+	var res []string
+	for k, _ := range t.sources {
+		res = append(res, k)
+	}
+	return res
 }
 
 func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
-	fmt.Println("CR", tp)
 	topic := tp.Topic
 	src, ok := t.processors[topic]
 	if !ok {
@@ -65,6 +74,7 @@ func appendChildren(t *TopologyBuilder, p *TopologyProcessor) []string {
 func NewTopologyBuilder() *TopologyBuilder {
 	return &TopologyBuilder{
 		processors: map[string]*TopologyProcessor{},
+		sources:    map[string]*TopologyProcessor{},
 	}
 }
 
@@ -107,11 +117,12 @@ func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeser
 	}
 
 	t.processors[name] = topoSource
+	t.sources[name] = topoSource
 
 	return nil
 }
 
-func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, name string, p func() Process0r[Kin, Vin, Kout, Vout]) error {
+func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, name string, p func() Processor[Kin, Vin, Kout, Vout]) error {
 	topoProcessor := &TopologyProcessor{
 		Name: name,
 		Builder: func() any {

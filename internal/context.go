@@ -1,4 +1,4 @@
-package streamz
+package internal
 
 type Context[Kout any, Vout any] interface {
 	Forward(k Kout, v Vout)

@@ -1,4 +1,4 @@
-package streamz
+package internal
 
 import (
 	"fmt"

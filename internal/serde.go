@@ -1,4 +1,4 @@
-package streamz
+package internal
 
 type Serializer[T any] func(T) ([]byte, error)
 
