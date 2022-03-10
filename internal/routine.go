@@ -46,7 +46,7 @@ type StreamRoutine struct {
 	cancelPollMtx sync.Mutex
 	cancelPoll    func()
 
-	closed sync.WaitGroup
+	closed *sync.WaitGroup
 }
 
 type AssignedOrRevoked struct {
@@ -59,7 +59,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
 
 	// Close hangs if this channel is full/not read
-	par := make(chan AssignedOrRevoked, 5)
+	par := make(chan AssignedOrRevoked)
 
 	topics := t.GetTopics()
 	client, err := kgo.NewClient(
@@ -81,6 +81,8 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
 	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
 
+	wg := &sync.WaitGroup{}
+
 	sr := &StreamRoutine{
 		name:              name,
 		log:               &log,
@@ -92,8 +94,8 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 		state:             StateCreated,
 		assignedOrRevoked: par,
 		closeRequested:    make(chan struct{}, 1),
+		closed:            wg,
 	}
-	sr.closed.Add(1)
 	return sr, nil
 }
 
@@ -174,12 +176,18 @@ func (r *StreamRoutine) handleRunning() {
 	cancel()
 }
 
+func (r *StreamRoutine) handleClosed() {
+	r.closed.Done()
+}
+
 // State transitions may only be done from within the loop
 func (r *StreamRoutine) Loop() {
 	for {
 		switch r.state {
 		case StateClosed:
-			r.closed.Done()
+			r.handleClosed()
+
+			// Done, exit loop
 			return
 		case StateCloseRequested:
 
@@ -237,6 +245,7 @@ func (r *StreamRoutine) Loop() {
 
 func (r *StreamRoutine) Close() error {
 	r.log.Debug().Msg("Close")
+	r.closed.Add(1)
 
 	r.log.Debug().Msg("cancel")
 	r.cancelPollMtx.Lock()
