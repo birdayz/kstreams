@@ -2,9 +2,9 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"runtime/pprof"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -42,6 +42,11 @@ type StreamRoutine struct {
 	closeRequested chan struct{}
 
 	name string
+
+	cancelPollMtx sync.Mutex
+	cancelPoll    func()
+
+	closed sync.WaitGroup
 }
 
 type AssignedOrRevoked struct {
@@ -54,7 +59,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
 
 	// Close hangs if this channel is full/not read
-	par := make(chan AssignedOrRevoked)
+	par := make(chan AssignedOrRevoked, 5)
 
 	topics := t.GetTopics()
 	client, err := kgo.NewClient(
@@ -76,7 +81,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
 	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
 
-	return &StreamRoutine{
+	sr := &StreamRoutine{
 		name:              name,
 		log:               &log,
 		group:             group,
@@ -86,7 +91,10 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 		t:                 t,
 		state:             StateCreated,
 		assignedOrRevoked: par,
-	}, nil
+		closeRequested:    make(chan struct{}, 1),
+	}
+	sr.closed.Add(1)
+	return sr, nil
 }
 
 func (r *StreamRoutine) changeState(newState RoutineState) {
@@ -103,14 +111,90 @@ func (r *StreamRoutine) Start() {
 	}()
 }
 
+func (r *StreamRoutine) handleRunning() {
+	select {
+	case <-r.closeRequested:
+		r.changeState(StateCloseRequested)
+		return
+	case x := <-r.assignedOrRevoked:
+		_ = x
+		r.log.Info().Msg("Assigned or rev p.")
+	default:
+	}
+
+	// r.client.AllowRebalance()
+
+	// TODO: partitions assigned can be called even when in state running!
+
+	// Check if partitions have been revoked
+
+	// FIXME If client is stuck here, it can't consume from "partitions revoked" signal
+
+	r.cancelPollMtx.Lock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.cancelPoll = cancel
+	r.cancelPollMtx.Unlock()
+
+	r.log.Debug().Msg("PollFetch")
+	f := r.client.PollFetches(ctx)
+	r.log.Debug().Msg("Nach PollFetch")
+
+	if f.IsClientClosed() {
+		r.log.Debug().Msg("Err client Closed")
+		r.changeState(StateCloseRequested)
+		return
+	}
+
+	f.EachPartition(func(ftp kgo.FetchTopicPartition) {
+		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Msg("Process Msg")
+
+		tp := TopicPartition{
+			Topic:     ftp.Topic,
+			Partition: ftp.Partition,
+		}
+
+		// TODO Can actually happen, before we get the info that partions have been assigned
+		task, ok := r.Tasks[tp]
+		if !ok {
+			panic("task not found")
+		}
+
+		ftp.EachRecord(func(rec *kgo.Record) {
+			task.Process(rec)
+
+			// TODO: do not commit every time
+			err := r.client.CommitRecords(context.Background(), rec)
+
+			r.log.Info().Err(err).Msg("Commit rec")
+
+		})
+
+	})
+	cancel()
+}
+
 // State transitions may only be done from within the loop
 func (r *StreamRoutine) Loop() {
 	for {
 		switch r.state {
 		case StateClosed:
+			r.closed.Done()
 			return
 		case StateCloseRequested:
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+
+			go func() {
+				for range r.assignedOrRevoked {
+				}
+				wg.Done()
+			}()
+
 			r.client.Close()
+			close(r.assignedOrRevoked)
+			wg.Wait()
 			r.changeState(StateClosed)
 		case StateCreated:
 			select {
@@ -145,60 +229,7 @@ func (r *StreamRoutine) Loop() {
 			r.changeState(StateRunning)
 			continue
 		case StateRunning:
-
-			// Assigned!
-
-			select {
-			case x := <-r.assignedOrRevoked:
-				_ = x
-				r.log.Info().Msg("Assigned or rev p.")
-			default:
-			}
-
-			//r.client.AllowRebalance()
-
-			// TODO: partitions assigned can be called even when in state running!
-
-			// Check if partitions have been revoked
-
-			// FIXME If client is stuck here, it can't consume from "partitions revoked" signal
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-			f := r.client.PollFetches(ctx)
-
-			if f.IsClientClosed() {
-
-				fmt.Println("clozer")
-				r.changeState(StateClosed)
-				cancel()
-				continue
-			}
-
-			f.EachPartition(func(ftp kgo.FetchTopicPartition) {
-				r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Msg("Process Msg")
-
-				tp := TopicPartition{
-					Topic:     ftp.Topic,
-					Partition: ftp.Partition,
-				}
-
-				// TODO Can actually happen, before we get the info that partions have been assigned
-				task, ok := r.Tasks[tp]
-				if !ok {
-					panic("task not found")
-				}
-
-				ftp.EachRecord(func(rec *kgo.Record) {
-					task.Process(rec)
-
-					// TODO: do not commit every time
-					err := r.client.CommitRecords(context.Background(), rec)
-
-					r.log.Info().Err(err).Msg("Commit rec")
-
-				})
-
-			})
-			cancel()
+			r.handleRunning()
 		}
 
 	}
@@ -206,15 +237,16 @@ func (r *StreamRoutine) Loop() {
 
 func (r *StreamRoutine) Close() error {
 	r.log.Debug().Msg("Close")
-	r.m.Lock()
-	r.exit = true
-	r.m.Unlock()
 
-	r.log.Debug().Msg("Client close")
-	r.client.Close()
+	r.log.Debug().Msg("cancel")
+	r.cancelPollMtx.Lock()
+	r.cancelPoll()
 
-	r.log.Debug().Msg("Client closed")
+	r.closeRequested <- struct{}{}
+	r.closed.Wait()
+
 	r.log.Debug().Msg("Closed")
+	r.cancelPollMtx.Unlock()
 	return nil
 }
 
