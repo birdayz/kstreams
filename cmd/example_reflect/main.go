@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,32 +11,34 @@ import (
 	"github.com/birdayz/streamz"
 	"github.com/birdayz/streamz/internal"
 	"github.com/rs/zerolog"
+
+	"net/http"
+	_ "net/http"
+	_ "net/http/pprof"
 )
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
 	log := zerolog.New(output).With().Timestamp().Logger()
 
+	// Move all internal stuff to public api
 	t := internal.NewTopologyBuilder()
 
-	err := internal.AddSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
-	if err != nil {
-		panic(err)
-	}
+	internal.MustAddSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
 
-	p := internal.Processor[string, string, string, string](&MyProcessor{})
-	p2 := internal.Processor[string, string, string, string](&MyProcessor2{})
+	p := internal.NewProcessor("processor-a", NewMyProcessor)
+	p2 := internal.NewProcessor("processor-2", func() internal.Processor[string, string, string, string] {
+		return &MyProcessor2{}
+	})
 
-	if err := internal.AddProcessor(t, "processor-a", func() internal.Processor[string, string, string, string] { return p }); err != nil {
-		panic(err)
-	}
+	internal.MustAddProcessor(t, p)
+	internal.MustAddProcessor(t, p2)
 
-	if err := internal.AddProcessor(t, "processor-2", func() internal.Processor[string, string, string, string] { return p2 }); err != nil {
-		panic(err)
-	}
-
-	// TODO: add args with the two processors. so it's statically checked for types
+	// TODO: want some type safety here
 	if err := internal.SetParent[string, string, string, string](t, "my-topic", "processor-a"); err != nil {
 		panic(err)
 	}
@@ -43,14 +46,6 @@ func main() {
 	if err := internal.SetParent[string, string, string, string](t, "processor-a", "processor-2"); err != nil {
 		panic(err)
 	}
-
-	// task, err := t.CreateTask(streamz.TopicPartition{Topic: "my-topic", Partition: 1})
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	//task.Process(&kgo.Record{Topic: "my-topic", Partition: 1, Key: []byte(`abc`), Value: []byte(`def`)})
-	// seeds := []string{"localhost:9092"}
 
 	str := streamz.New(t, streamz.WithNumRoutines(2))
 
@@ -74,6 +69,10 @@ var StringDeserializer = func(data []byte) (string, error) {
 
 var StringSerializer = func(data string) ([]byte, error) {
 	return []byte(data), nil
+}
+
+func NewMyProcessor() internal.Processor[string, string, string, string] {
+	return &MyProcessor{}
 }
 
 type MyProcessor struct{}

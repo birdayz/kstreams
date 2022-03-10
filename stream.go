@@ -1,6 +1,10 @@
 package streamz
 
-import "github.com/birdayz/streamz/internal"
+import (
+	"fmt"
+
+	"github.com/birdayz/streamz/internal"
+)
 
 type Option func(*Streamz)
 
@@ -37,7 +41,7 @@ func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
 
 func (c *Streamz) Start() error {
 	for i := 0; i < c.numRoutines; i++ {
-		routine, err := internal.NewStreamRoutine(c.t, c.groupName, c.brokers)
+		routine, err := internal.NewStreamRoutine(fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
 		if err != nil {
 			return err
 		}

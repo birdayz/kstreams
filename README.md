@@ -10,3 +10,4 @@ WIP: some experiments about go generics and implementing kafka streams
 - [ ] Async support plan
 - [ ] Context overhaul, logging, ...
 - [ ] Prometheus support. -> Possibly in integration/plugin folder with own go.mod, tracing
+- [ ] Fanout,dynamic routing/sink topics

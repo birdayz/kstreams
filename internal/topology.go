@@ -14,7 +14,7 @@ type TopologyBuilder struct {
 
 func (t *TopologyBuilder) GetTopics() []string {
 	var res []string
-	for k, _ := range t.sources {
+	for k := range t.sources {
 		res = append(res, k)
 	}
 	return res
@@ -88,6 +88,10 @@ type TopologyProcessor struct {
 	AddChildFunc func(parent any, child any) // Builds ProcessorNode. Call Next() for each in ChildProcessors
 }
 
+func MustAddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) {
+	must(AddSource(t, name, topic, keyDeserializer, valueDeserializer))
+}
+
 func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) error {
 	topoSource := &TopologyProcessor{
 		Name: name,
@@ -122,12 +126,22 @@ func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeser
 	return nil
 }
 
-func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, name string, p func() Processor[Kin, Vin, Kout, Vout]) error {
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout]) {
+	must(AddProcessor(t, p))
+}
+
+func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout]) error {
 	topoProcessor := &TopologyProcessor{
-		Name: name,
+		Name: p.Name(),
 		Builder: func() any {
 			px := &Process0rNode[Kin, Vin, Kout, Vout]{
-				processor: p(),
+				processor: p.Build(),
 				outputs:   map[string]GenericProcessor[Kout, Vout]{},
 				ctx: &ProcessorContext[Kout, Vout]{
 					outputs:      map[string]GenericProcessor[Kout, Vout]{},
@@ -154,11 +168,11 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, name string, p f
 		parentNode.ctx.outputs["childa"] = childNode
 	}
 
-	if _, found := t.processors[name]; found {
+	if _, found := t.processors[p.Name()]; found {
 		return ErrNodeAlreadyExists
 	}
 
-	t.processors[name] = topoProcessor
+	t.processors[p.Name()] = topoProcessor
 
 	return nil
 }
