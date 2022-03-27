@@ -46,7 +46,9 @@ type StreamRoutine struct {
 	cancelPollMtx sync.Mutex
 	cancelPoll    func()
 
-	closed *sync.WaitGroup
+	closed sync.WaitGroup
+
+	maxPollRecords int
 }
 
 type AssignedOrRevoked struct {
@@ -65,6 +67,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
+		//kgo.BlockRebalanceOnPoll(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Assigned: m}
@@ -81,8 +84,6 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
 	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
 
-	wg := &sync.WaitGroup{}
-
 	sr := &StreamRoutine{
 		name:              name,
 		log:               &log,
@@ -94,8 +95,9 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 		state:             StateCreated,
 		assignedOrRevoked: par,
 		closeRequested:    make(chan struct{}, 1),
-		closed:            wg,
+		maxPollRecords:    10,
 	}
+	sr.closed.Add(1)
 	return sr, nil
 }
 
@@ -114,6 +116,8 @@ func (r *StreamRoutine) Start() {
 }
 
 func (r *StreamRoutine) handleRunning() {
+
+	r.cancelPollMtx.Lock()
 	select {
 	case <-r.closeRequested:
 		r.changeState(StateCloseRequested)
@@ -132,14 +136,14 @@ func (r *StreamRoutine) handleRunning() {
 
 	// FIXME If client is stuck here, it can't consume from "partitions revoked" signal
 
-	r.cancelPollMtx.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r.cancelPoll = cancel
+
 	r.cancelPollMtx.Unlock()
 
 	r.log.Debug().Msg("PollFetch")
-	f := r.client.PollFetches(ctx)
+	f := r.client.PollRecords(ctx, r.maxPollRecords)
 	r.log.Debug().Msg("Nach PollFetch")
 
 	if f.IsClientClosed() {
@@ -173,6 +177,8 @@ func (r *StreamRoutine) handleRunning() {
 		})
 
 	})
+
+	r.client.AllowRebalance()
 	cancel()
 }
 
@@ -217,6 +223,8 @@ func (r *StreamRoutine) Loop() {
 				continue
 			}
 
+		// In State PartitionsAssigned, tasks are set up. it transists to RUNNING
+		// once all tasks are ready
 		case StatePartitionsAssigned:
 			for topic, partitions := range r.partitionsAssigned {
 				for _, partition := range partitions {
@@ -245,17 +253,22 @@ func (r *StreamRoutine) Loop() {
 
 func (r *StreamRoutine) Close() error {
 	r.log.Debug().Msg("Close")
-	r.closed.Add(1)
 
 	r.log.Debug().Msg("cancel")
 	r.cancelPollMtx.Lock()
-	r.cancelPoll()
+
+	r.closeRequested <- struct{}{}
+	if r.cancelPoll != nil {
+		r.cancelPoll()
+	}
+
+	r.cancelPollMtx.Unlock()
+	r.log.Debug().Msg("cancelled")
 
 	r.closeRequested <- struct{}{}
 	r.closed.Wait()
 
 	r.log.Debug().Msg("Closed")
-	r.cancelPollMtx.Unlock()
 	return nil
 }
 
