@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/birdayz/streamz/sdk"
 )
 
 type TopologyBuilder struct {
@@ -88,11 +90,11 @@ type TopologyProcessor struct {
 	AddChildFunc func(parent any, child any) // Builds ProcessorNode. Call Next() for each in ChildProcessors
 }
 
-func MustAddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) {
+func MustAddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) {
 	must(AddSource(t, name, topic, keyDeserializer, valueDeserializer))
 }
 
-func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) error {
+func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) error {
 	topoSource := &TopologyProcessor{
 		Name: name,
 		Builder: func() any {
@@ -132,11 +134,11 @@ func must(err error) {
 	}
 }
 
-func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout]) {
+func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout]) {
 	must(AddProcessor(t, p))
 }
 
-func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout]) error {
+func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout]) error {
 	topoProcessor := &TopologyProcessor{
 		Name: p.Name(),
 		Builder: func() any {

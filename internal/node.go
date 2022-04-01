@@ -1,11 +1,13 @@
 package internal
 
+import "github.com/birdayz/streamz/sdk"
+
 type Nexter[K, V any] interface {
 	AddNext(GenericProcessor[K, V])
 }
 
 type Process0rNode[Kin any, Vin any, Kout any, Vout any] struct {
-	processor Processor[Kin, Vin, Kout, Vout]
+	processor sdk.Processor[Kin, Vin, Kout, Vout]
 	outputs   map[string]GenericProcessor[Kout, Vout]
 
 	ctx *ProcessorContext[Kout, Vout]

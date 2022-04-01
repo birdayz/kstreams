@@ -1,9 +1,5 @@
 package internal
 
-type Context[Kout any, Vout any] interface {
-	Forward(k Kout, v Vout)
-}
-
 type ProcessorContext[Kout any, Vout any] struct {
 	outputs map[string]GenericProcessor[Kout, Vout]
 

@@ -3,12 +3,13 @@ package internal
 import (
 	"fmt"
 
+	"github.com/birdayz/streamz/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 type SinkNode[K any, V any] struct {
-	KeySerializer   Serializer[K]
-	ValueSerializer Serializer[V]
+	KeySerializer   sdk.Serializer[K]
+	ValueSerializer sdk.Serializer[V]
 
 	client *kgo.Client
 	topic  string

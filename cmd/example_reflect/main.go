@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/birdayz/streamz"
-	"github.com/birdayz/streamz/internal"
+	"github.com/birdayz/streamz/sdk"
 	"github.com/rs/zerolog"
 
 	"net/http"
@@ -26,24 +26,24 @@ func main() {
 	log := zerolog.New(output).With().Timestamp().Logger()
 
 	// Move all internal stuff to public api
-	t := internal.NewTopologyBuilder()
+	t := streamz.NewTopologyBuilder()
 
-	internal.MustAddSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
+	streamz.RegisterSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
 
-	p := internal.NewProcessor("processor-a", NewMyProcessor)
-	p2 := internal.NewProcessor("processor-2", func() internal.Processor[string, string, string, string] {
+	p := streamz.NewProcessor("processor-a", NewMyProcessor)
+	p2 := streamz.NewProcessor("processor-2", func() sdk.Processor[string, string, string, string] {
 		return &MyProcessor2{}
 	})
 
-	internal.MustAddProcessor(t, p)
-	internal.MustAddProcessor(t, p2)
+	streamz.RegisterProcessor(t, p)
+	streamz.RegisterProcessor(t, p2)
 
 	// TODO: want some type safety here
-	if err := internal.SetParent[string, string, string, string](t, "my-topic", "processor-a"); err != nil {
+	if err := streamz.SetParent[string, string, string, string](t, "my-topic", "processor-a"); err != nil {
 		panic(err)
 	}
 
-	if err := internal.SetParent[string, string, string, string](t, "processor-a", "processor-2"); err != nil {
+	if err := streamz.SetParent[string, string, string, string](t, "processor-a", "processor-2"); err != nil {
 		panic(err)
 	}
 
@@ -71,13 +71,13 @@ var StringSerializer = func(data string) ([]byte, error) {
 	return []byte(data), nil
 }
 
-func NewMyProcessor() internal.Processor[string, string, string, string] {
+func NewMyProcessor() sdk.Processor[string, string, string, string] {
 	return &MyProcessor{}
 }
 
 type MyProcessor struct{}
 
-func (p *MyProcessor) Process(ctx internal.Context[string, string], k string, v string) error {
+func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
 	fmt.Println("LEEEEEEEEEEEL", k, v)
 	v2 := v + "-modified"
 	ctx.Forward(k, v2)
@@ -86,7 +86,7 @@ func (p *MyProcessor) Process(ctx internal.Context[string, string], k string, v 
 
 type MyProcessor2 struct{}
 
-func (p *MyProcessor2) Process(ctx internal.Context[string, string], k string, v string) error {
+func (p *MyProcessor2) Process(ctx sdk.Context[string, string], k string, v string) error {
 	fmt.Println("second", k, v)
 	return nil
 }

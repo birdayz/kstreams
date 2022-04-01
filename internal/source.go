@@ -1,14 +1,17 @@
 package internal
 
-import "github.com/twmb/franz-go/pkg/kgo"
+import (
+	"github.com/birdayz/streamz/sdk"
+	"github.com/twmb/franz-go/pkg/kgo"
+)
 
 type RecordProcessor interface {
 	Process(m *kgo.Record) error
 }
 
 type SourceNode[K any, V any] struct {
-	KeyDeserializer   Deserializer[K]
-	ValueDeserializer Deserializer[V]
+	KeyDeserializer   sdk.Deserializer[K]
+	ValueDeserializer sdk.Deserializer[V]
 
 	Next GenericProcessor[K, V]
 }
