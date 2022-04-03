@@ -42,7 +42,7 @@ func main() {
 		return nil
 	}, "processor-3", "processor-2")
 
-	str := streamz.New(t, streamz.WithNumRoutines(2))
+	str := streamz.New(t, streamz.WithNumRoutines(1000))
 
 	log.Info().Msg("Start streamz")
 	str.Start()

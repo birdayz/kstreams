@@ -37,7 +37,8 @@ type StreamRoutine struct {
 
 	assignedOrRevoked chan AssignedOrRevoked
 
-	partitionsAssigned map[string][]int32
+	newlyAssigned map[string][]int32
+	newlyRevoked  map[string][]int32
 
 	closeRequested chan struct{}
 
@@ -67,7 +68,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		kgo.BlockRebalanceOnPoll(),
+		// kgo.BlockRebalanceOnPoll(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Assigned: m}
@@ -116,25 +117,27 @@ func (r *StreamRoutine) Start() {
 }
 
 func (r *StreamRoutine) handleRunning() {
-
 	r.cancelPollMtx.Lock()
+
 	select {
-	case <-r.closeRequested:
-		r.changeState(StateCloseRequested)
+	case ev := <-r.assignedOrRevoked:
+		r.changeState(StatePartitionsAssigned)
+		r.newlyAssigned = ev.Assigned
+		r.newlyRevoked = ev.Revoked
+		r.cancelPollMtx.Unlock()
 		return
-	case x := <-r.assignedOrRevoked:
-		_ = x
-		r.log.Info().Msg("Assigned or rev p.")
 	default:
 	}
 
-	// TODO: partitions assigned can be called even when in state running!
+	select {
+	case <-r.closeRequested:
+		r.changeState(StateCloseRequested)
+		r.cancelPollMtx.Unlock()
+		return
+	default:
+	}
 
-	// Check if partitions have been revoked
-
-	// FIXME If client is stuck here, it can't consume from "partitions revoked" signal
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	r.cancelPoll = cancel
 
@@ -142,6 +145,7 @@ func (r *StreamRoutine) handleRunning() {
 
 	r.log.Debug().Msg("Polling Records")
 	f := r.client.PollRecords(ctx, r.maxPollRecords)
+	// defer r.client.AllowRebalance()
 	r.log.Debug().Msg("Polled Records")
 
 	if f.IsClientClosed() {
@@ -176,7 +180,6 @@ func (r *StreamRoutine) handleRunning() {
 
 	})
 
-	r.client.AllowRebalance()
 	cancel()
 }
 
@@ -211,10 +214,9 @@ func (r *StreamRoutine) Loop() {
 		case StateCreated:
 			select {
 			case assignments := <-r.assignedOrRevoked:
-				if len(assignments.Assigned) > 0 {
-					r.changeState(StatePartitionsAssigned)
-					r.partitionsAssigned = assignments.Assigned
-				}
+				r.newlyAssigned = assignments.Assigned
+				r.newlyRevoked = assignments.Revoked
+				r.changeState(StatePartitionsAssigned)
 				continue
 			case <-r.closeRequested:
 				r.changeState(StateCloseRequested)
@@ -224,7 +226,26 @@ func (r *StreamRoutine) Loop() {
 		// In State PartitionsAssigned, tasks are set up. it transists to RUNNING
 		// once all tasks are ready
 		case StatePartitionsAssigned:
-			for topic, partitions := range r.partitionsAssigned {
+			// Handle revoked
+
+			for topic, partitions := range r.newlyRevoked {
+				for _, partition := range partitions {
+					tp := TopicPartition{
+						Topic:     topic,
+						Partition: partition,
+					}
+
+					_, ok := r.Tasks[tp]
+					if !ok {
+						panic("should not happen. did not find task for revoked partition")
+					}
+					delete(r.Tasks, tp)
+					r.log.Debug().Str("topic", tp.Topic).Int32("partition", tp.Partition).Msg("Removed Task")
+					// TODO possibly add Close() call to task?
+				}
+			}
+
+			for topic, partitions := range r.newlyAssigned {
 				for _, partition := range partitions {
 					tp := TopicPartition{
 						Topic:     topic,
@@ -240,7 +261,15 @@ func (r *StreamRoutine) Loop() {
 				}
 
 			}
-			r.changeState(StateRunning)
+
+			r.newlyAssigned = nil
+			r.newlyRevoked = nil
+
+			if len(r.Tasks) > 0 {
+				r.changeState(StateRunning)
+			} else {
+				r.changeState(StateCreated)
+			}
 			continue
 		case StateRunning:
 			r.handleRunning()
@@ -263,7 +292,6 @@ func (r *StreamRoutine) Close() error {
 	r.cancelPollMtx.Unlock()
 	r.log.Debug().Msg("cancelled")
 
-	r.closeRequested <- struct{}{}
 	r.closed.Wait()
 
 	r.log.Debug().Msg("Closed")
