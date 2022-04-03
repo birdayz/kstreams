@@ -72,8 +72,3 @@ func NewProcessorBuilder[Kin any, Vin any, Kout any, Vout any](name string, buil
 		buildFunc: buildFunc,
 	}
 }
-
-//
-// func SetParent[KparentIn, VParentIn, KParentOut, VParentOut, KChildOut, VChildOut any](t *TopologyBuilder, parent sdk.ProcessorBuilder[KparentIn, VParentIn, KParentOut, VParentOut], child sdk.ProcessorBuilder[KParentOut, VParentOut, KChildOut, VChildOut]) error {
-// 	return internal.SetParent(t, parent, child)
-// }
