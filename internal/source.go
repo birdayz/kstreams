@@ -13,7 +13,7 @@ type SourceNode[K any, V any] struct {
 	KeyDeserializer   sdk.Deserializer[K]
 	ValueDeserializer sdk.Deserializer[V]
 
-	Next GenericProcessor[K, V]
+	Nexts []GenericProcessor[K, V]
 }
 
 func (n *SourceNode[K, V]) Process(m *kgo.Record) error {
@@ -27,9 +27,15 @@ func (n *SourceNode[K, V]) Process(m *kgo.Record) error {
 		return err
 	}
 
-	return n.Next.Process(key, value)
+	for _, next := range n.Nexts {
+		if err := next.Process(key, value); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (n *SourceNode[K, V]) AddNext(next GenericProcessor[K, V]) {
-	n.Next = next
+	n.Nexts = append(n.Nexts, next)
 }

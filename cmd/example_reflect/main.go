@@ -30,22 +30,17 @@ func main() {
 
 	streamz.RegisterSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
 
-	p := streamz.NewProcessor("processor-a", NewMyProcessor)
-	p2 := streamz.NewProcessor("processor-2", func() sdk.Processor[string, string, string, string] {
+	p := streamz.NewProcessorBuilder("processor-1", NewMyProcessor)
+	p2 := streamz.NewProcessorBuilder("processor-2", func() sdk.Processor[string, string, string, string] {
 		return &MyProcessor2{}
 	})
 
-	streamz.RegisterProcessor(t, p)
-	streamz.RegisterProcessor(t, p2)
-
-	// TODO: want some type safety here
-	if err := streamz.SetParent[string, string, string, string](t, "my-topic", "processor-a"); err != nil {
-		panic(err)
-	}
-
-	if err := streamz.SetParent[string, string, string, string](t, "processor-a", "processor-2"); err != nil {
-		panic(err)
-	}
+	streamz.RegisterProcessor(t, p, "my-topic")
+	streamz.RegisterProcessor(t, p2, "processor-1")
+	streamz.RegisterProcessorFunc(t, func(ctx sdk.Context[string, string], k string, v string) error {
+		fmt.Printf("This is a simple in-line processor function. Received K=%s,V=%s\n", k, v)
+		return nil
+	}, "processor-3", "processor-2")
 
 	str := streamz.New(t, streamz.WithNumRoutines(2))
 
@@ -78,7 +73,6 @@ func NewMyProcessor() sdk.Processor[string, string, string, string] {
 type MyProcessor struct{}
 
 func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
-	fmt.Println("LEEEEEEEEEEEL", k, v)
 	v2 := v + "-modified"
 	ctx.Forward(k, v2)
 	return nil
@@ -87,6 +81,7 @@ func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v strin
 type MyProcessor2 struct{}
 
 func (p *MyProcessor2) Process(ctx sdk.Context[string, string], k string, v string) error {
-	fmt.Println("second", k, v)
+	fmt.Printf("Just printing out the data. Key=%s, Value=%s\n", k, v)
+	ctx.Forward(k, v)
 	return nil
 }

@@ -67,7 +67,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		//kgo.BlockRebalanceOnPoll(),
+		kgo.BlockRebalanceOnPoll(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Assigned: m}
@@ -128,23 +128,21 @@ func (r *StreamRoutine) handleRunning() {
 	default:
 	}
 
-	// r.client.AllowRebalance()
-
 	// TODO: partitions assigned can be called even when in state running!
 
 	// Check if partitions have been revoked
 
 	// FIXME If client is stuck here, it can't consume from "partitions revoked" signal
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	defer cancel()
 	r.cancelPoll = cancel
 
 	r.cancelPollMtx.Unlock()
 
-	r.log.Debug().Msg("PollFetch")
+	r.log.Debug().Msg("Polling Records")
 	f := r.client.PollRecords(ctx, r.maxPollRecords)
-	r.log.Debug().Msg("Nach PollFetch")
+	r.log.Debug().Msg("Polled Records")
 
 	if f.IsClientClosed() {
 		r.log.Debug().Msg("Err client Closed")

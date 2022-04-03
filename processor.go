@@ -15,19 +15,19 @@ func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, key
 	internal.MustAddSource(t, name, topic, keyDeserializer, valueDeserializer)
 }
 
-func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout]) {
+func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], parent string) {
 	internal.MustAddProcessor(t, p)
+	internal.MustSetParent(t, parent, p.Name())
 }
 
-func RegisterProcessorFunc[Kin, Vin, Kout, Vout any](t *TopologyBuilder, fn func(ctx sdk.Context[Kout, Vout], k Kin, v Vin) error) {
+func RegisterProcessorFunc[Kin, Vin, Kout, Vout any](t *TopologyBuilder, fn func(ctx sdk.Context[Kout, Vout], k Kin, v Vin) error, name, parent string) {
 	bldr := sdk.ProcessorBuilder[Kin, Vin, Kout, Vout](&GenericProcessorBuilder[Kin, Vin, Kout, Vout]{
-		name:        "",
+		name:        name,
 		processFunc: fn,
 	})
 
-	// Convert ?
-
 	internal.MustAddProcessor(t, sdk.ProcessorBuilder[Kin, Vin, Kout, Vout](bldr))
+	internal.MustSetParent(t, parent, name)
 }
 
 type GenericProcessorBuilder[Kin, Vin, Kout, Vout any] struct {
@@ -66,13 +66,14 @@ func (s *SimpleProcessorBuilder[Kin, Vin, Kout, Vout]) Name() string {
 	return s.name
 }
 
-func NewProcessor[Kin any, Vin any, Kout any, Vout any](name string, buildFunc func() sdk.Processor[Kin, Vin, Kout, Vout]) sdk.ProcessorBuilder[Kin, Vin, Kout, Vout] {
+func NewProcessorBuilder[Kin any, Vin any, Kout any, Vout any](name string, buildFunc func() sdk.Processor[Kin, Vin, Kout, Vout]) sdk.ProcessorBuilder[Kin, Vin, Kout, Vout] {
 	return &SimpleProcessorBuilder[Kin, Vin, Kout, Vout]{
 		name:      name,
 		buildFunc: buildFunc,
 	}
 }
 
-func SetParent[Kchild, Vchild, Kparent, Vparent any](t *TopologyBuilder, parent string, child string) error {
-	return internal.SetParent[Kchild, Vchild, Kparent, Vparent](t, parent, child)
-}
+//
+// func SetParent[KparentIn, VParentIn, KParentOut, VParentOut, KChildOut, VChildOut any](t *TopologyBuilder, parent sdk.ProcessorBuilder[KparentIn, VParentIn, KParentOut, VParentOut], child sdk.ProcessorBuilder[KParentOut, VParentOut, KChildOut, VChildOut]) error {
+// 	return internal.SetParent(t, parent, child)
+// }

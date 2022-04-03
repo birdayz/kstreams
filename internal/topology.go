@@ -179,7 +179,11 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 	return nil
 }
 
-func SetParent[Kchild, Vchild, Kparent, Vparent any](t *TopologyBuilder, parent string, child string) error {
+func MustSetParent(t *TopologyBuilder, parent, child string) {
+	must(SetParent(t, parent, child))
+}
+
+func SetParent(t *TopologyBuilder, parent, child string) error {
 	parentNode, ok := t.processors[parent]
 	if !ok {
 		return ErrNodeNotFound
@@ -188,6 +192,7 @@ func SetParent[Kchild, Vchild, Kparent, Vparent any](t *TopologyBuilder, parent 
 	parentNode.ChildProcessors = append(parentNode.ChildProcessors, child)
 
 	return nil
+
 }
 
 type Topology struct {
