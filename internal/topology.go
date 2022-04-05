@@ -54,9 +54,7 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 		}
 	}
 
-	task := &Task{
-		rootNode: builtProcessors[topic].(RecordProcessor),
-	}
+	task := NewTask(tp.Topic, tp.Partition, builtProcessors[topic].(RecordProcessor))
 	return task, nil
 
 }

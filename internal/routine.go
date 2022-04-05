@@ -68,6 +68,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
+		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Assigned: m}
@@ -168,18 +169,20 @@ func (r *StreamRoutine) handleRunning() {
 		}
 
 		ftp.EachRecord(func(rec *kgo.Record) {
-			task.Process(rec)
-
-			// TODO: do not commit every time
-			err := r.client.CommitRecords(context.Background(), rec)
-
-			r.log.Info().Err(err).Msg("Commit rec")
-
+			if err := task.Process(rec); err != nil {
+				r.log.Error().Msg("Failed to process record")
+				r.changeState(StateCloseRequested)
+				return
+			}
 		})
 
-	})
+		if err := task.Commit(r.client, r.log); err != nil {
+			r.changeState(StateCloseRequested)
+			return
+		}
+		r.log.Info().Msg("Commit successful")
 
-	cancel()
+	})
 }
 
 func (r *StreamRoutine) handleClosed() {
@@ -203,6 +206,7 @@ func (r *StreamRoutine) Loop() {
 			go func() {
 				// Wait until this is closed
 				for range r.assignedOrRevoked {
+					// TODO: OnRevoke: do commit here if needed
 				}
 				wg.Done()
 			}()
