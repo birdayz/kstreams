@@ -13,3 +13,4 @@ WIP: some experiments about go generics and implementing kafka streams
 - [ ] Prometheus support. -> Possibly in integration/plugin folder with own go.mod, tracing
 - [ ] Fanout,dynamic routing/sink topics
 - [ ] Change topology, incrementally - restart only parts => can be used to build higher level systems
+- [ ] Commit periodically, commit in OnRevoke
