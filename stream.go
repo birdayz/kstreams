@@ -2,6 +2,7 @@ package streamz
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/birdayz/streamz/internal"
 )
@@ -52,8 +53,15 @@ func (c *Streamz) Start() error {
 }
 
 func (c *Streamz) Close() error {
+	var wg sync.WaitGroup
 	for _, routine := range c.routines {
-		routine.Close()
+		wg.Add(1)
+		go func(routine *internal.StreamRoutine) {
+			routine.Close()
+			wg.Done()
+		}(routine)
 	}
+
+	wg.Wait()
 	return nil
 }

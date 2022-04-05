@@ -68,7 +68,6 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		// kgo.BlockRebalanceOnPoll(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Assigned: m}
@@ -121,9 +120,9 @@ func (r *StreamRoutine) handleRunning() {
 
 	select {
 	case ev := <-r.assignedOrRevoked:
-		r.changeState(StatePartitionsAssigned)
 		r.newlyAssigned = ev.Assigned
 		r.newlyRevoked = ev.Revoked
+		r.changeState(StatePartitionsAssigned)
 		r.cancelPollMtx.Unlock()
 		return
 	default:
@@ -202,13 +201,14 @@ func (r *StreamRoutine) Loop() {
 			wg.Add(1)
 
 			go func() {
+				// Wait until this is closed
 				for range r.assignedOrRevoked {
 				}
 				wg.Done()
 			}()
 
 			r.client.Close()
-			close(r.assignedOrRevoked)
+			close(r.assignedOrRevoked) // Can close this only after client is closed, as the client writer to that channel
 			wg.Wait()
 			r.changeState(StateClosed)
 		case StateCreated:
@@ -240,7 +240,7 @@ func (r *StreamRoutine) Loop() {
 						panic("should not happen. did not find task for revoked partition")
 					}
 					delete(r.Tasks, tp)
-					r.log.Debug().Str("topic", tp.Topic).Int32("partition", tp.Partition).Msg("Removed Task")
+					r.log.Warn().Str("topic", tp.Topic).Int32("partition", tp.Partition).Msg("Removed Task")
 					// TODO possibly add Close() call to task?
 				}
 			}
