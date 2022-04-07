@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 type Task struct {
@@ -34,13 +36,37 @@ func (t *Task) Process(records ...*kgo.Record) error {
 
 func (t *Task) Commit(client *kgo.Client, log *zerolog.Logger) error {
 	if t.needCommit {
+		errCh := make(chan error, 1)
 		client.CommitOffsetsSync(context.Background(), map[string]map[int32]kgo.EpochOffset{
 			t.topic: {
 				t.partition: {
 					Offset: t.comittableOffset,
 				},
 			},
-		}, nil)
+		}, func(c *kgo.Client, ocr1 *kmsg.OffsetCommitRequest, ocr2 *kmsg.OffsetCommitResponse, e error) {
+			if e != nil {
+				errCh <- e
+				return
+			}
+
+			for _, t := range ocr2.Topics {
+				for _, p := range t.Partitions {
+					err := kerr.ErrorForCode(p.ErrorCode)
+					if err != nil {
+						errCh <- err
+						return
+					}
+				}
+			}
+
+			errCh <- nil
+
+		})
+
+		if err := <-errCh; err != nil {
+			return err
+		}
+
 		// FIXME check for errors
 		t.needCommit = false
 

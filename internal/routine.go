@@ -96,7 +96,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 		state:             StateCreated,
 		assignedOrRevoked: par,
 		closeRequested:    make(chan struct{}, 1),
-		maxPollRecords:    10,
+		maxPollRecords:    10000,
 	}
 	sr.closed.Add(1)
 	return sr, nil
@@ -155,7 +155,6 @@ func (r *StreamRoutine) handleRunning() {
 	}
 
 	f.EachPartition(func(ftp kgo.FetchTopicPartition) {
-		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Msg("Process Msg")
 
 		tp := TopicPartition{
 			Topic:     ftp.Topic,
@@ -168,19 +167,22 @@ func (r *StreamRoutine) handleRunning() {
 			panic("task not found")
 		}
 
+		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Msg("Processing")
+		count := 0
 		ftp.EachRecord(func(rec *kgo.Record) {
+			count++
 			if err := task.Process(rec); err != nil {
 				r.log.Error().Msg("Failed to process record")
 				r.changeState(StateCloseRequested)
 				return
 			}
 		})
+		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Int("count", count).Msg("Processed")
 
 		if err := task.Commit(r.client, r.log); err != nil {
 			r.changeState(StateCloseRequested)
 			return
 		}
-		r.log.Info().Msg("Commit successful")
 
 	})
 }
