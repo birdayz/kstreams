@@ -23,7 +23,7 @@ func main() {
 	}()
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
-	log := zerolog.New(output).With().Timestamp().Logger()
+	log := zerolog.New(output).Level(zerolog.InfoLevel).With().Timestamp().Logger()
 
 	// Move all internal stuff to public api
 	t := streamz.NewTopologyBuilder()
@@ -52,9 +52,7 @@ func main() {
 	<-c
 
 	log.Info().Msg("Received signal")
-
 	str.Close()
-
 	log.Info().Msg("Closed")
 }
 

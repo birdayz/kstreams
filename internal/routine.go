@@ -207,7 +207,11 @@ func (r *StreamRoutine) Loop() {
 
 			go func() {
 				// Wait until this is closed
-				for range r.assignedOrRevoked {
+				for item := range r.assignedOrRevoked {
+					for topic, partitions := range item.Revoked {
+						tp := TopicPartition{}
+
+					}
 					// TODO: OnRevoke: do commit here if needed
 				}
 				wg.Done()
