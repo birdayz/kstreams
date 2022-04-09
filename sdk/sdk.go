@@ -2,8 +2,6 @@ package sdk
 
 import (
 	"errors"
-
-	"github.com/cockroachdb/pebble"
 )
 
 type Context[Kout any, Vout any] interface {
@@ -99,9 +97,6 @@ func (t *GenericStateStore[K, V]) Get(k K) (V, error) {
 
 	res, err := t.store.Get(key)
 	if err != nil {
-		if errors.Is(err, pebble.ErrNotFound) {
-			return v, ErrNotFound
-		}
 		return v, err
 	}
 

@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/birdayz/streamz/sdk"
@@ -30,6 +31,9 @@ func (s *pebbleStore) Set(k, v []byte) error {
 func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	v, closer, err := s.db.Get(k)
 	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, sdk.ErrNotFound
+		}
 		return nil, err
 	}
 	defer closer.Close()
