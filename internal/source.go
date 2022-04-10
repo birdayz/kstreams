@@ -36,6 +36,14 @@ func (n *SourceNode[K, V]) Process(m *kgo.Record) error {
 	return nil
 }
 
+func (n *SourceNode[K, V]) Close() error {
+	return nil
+}
+
+func (n *SourceNode[K, V]) Init(store ...sdk.Store) error {
+	return nil
+}
+
 func (n *SourceNode[K, V]) AddNext(next GenericProcessor[K, V]) {
 	n.Nexts = append(n.Nexts, next)
 }

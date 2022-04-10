@@ -21,11 +21,14 @@ func (s *pebbleStore) Flush() error {
 }
 
 func (s *pebbleStore) Close() error {
+	if err := s.db.Flush(); err != nil {
+		return err
+	}
 	return s.db.Close()
 }
 
 func (s *pebbleStore) Set(k, v []byte) error {
-	return s.db.Set(k, v, &pebble.WriteOptions{})
+	return s.db.Set(k, v, &pebble.WriteOptions{Sync: true})
 }
 
 func (s *pebbleStore) Get(k []byte) ([]byte, error) {

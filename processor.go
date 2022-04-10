@@ -39,6 +39,14 @@ type GenericProcessor[Kin, Vin, Kout, Vout any] struct {
 	processFunc func(ctx sdk.Context[Kout, Vout], k Kin, v Vin) error
 }
 
+func (g *GenericProcessor[Kin, Vin, Kout, Vout]) Close() error {
+	return nil
+}
+
+func (g *GenericProcessor[Kin, Vin, Kout, Vout]) Init(stores ...sdk.Store) error {
+	return nil
+}
+
 func (g *GenericProcessor[Kin, Vin, Kout, Vout]) Process(ctx sdk.Context[Kout, Vout], k Kin, v Vin) error {
 	return g.processFunc(ctx, k, v)
 }

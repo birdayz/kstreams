@@ -10,6 +10,7 @@ import (
 
 	"github.com/birdayz/streamz"
 	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/streamz/stores"
 	"github.com/rs/zerolog"
 
 	"net/http"
@@ -28,6 +29,8 @@ func main() {
 	// Move all internal stuff to public api
 	t := streamz.NewTopologyBuilder()
 
+	streamz.RegisterStore(t, &StoreBuilderImpl{})
+
 	streamz.RegisterSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
 
 	p := streamz.NewProcessorBuilder("processor-1", NewMyProcessor)
@@ -42,7 +45,7 @@ func main() {
 		return nil
 	}, "processor-3", "processor-2")
 
-	str := streamz.New(t, streamz.WithNumRoutines(1000))
+	str := streamz.New(t, streamz.WithNumRoutines(10))
 
 	log.Info().Msg("Start streamz")
 	str.Start()
@@ -68,11 +71,30 @@ func NewMyProcessor() sdk.Processor[string, string, string, string] {
 	return &MyProcessor{}
 }
 
-type MyProcessor struct{}
+type MyProcessor struct {
+	store sdk.KeyValueStore[string, string]
+}
+
+func (p *MyProcessor) Init(stores ...sdk.Store) error {
+	if len(stores) > 0 {
+		p.store = stores[0].(sdk.KeyValueStore[string, string])
+	}
+	return nil
+}
+
+func (p *MyProcessor) Close() error {
+	return nil
+}
 
 func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
-	v2 := v + "-modified"
-	ctx.Forward(k, v2)
+	// v2 := v + "-modified"
+	old, err := p.store.Get(k)
+	if err == nil {
+		fmt.Println("Found old value!", k, old)
+	}
+	p.store.Set(k, v)
+	fmt.Println("New value", k, v)
+	// ctx.Forward(k, v2)
 	return nil
 }
 
@@ -82,4 +104,30 @@ func (p *MyProcessor2) Process(ctx sdk.Context[string, string], k string, v stri
 	fmt.Printf("Just printing out the data. Key=%s, Value=%s\n", k, v)
 	ctx.Forward(k, v)
 	return nil
+}
+
+func (p *MyProcessor2) Init(stores ...sdk.Store) error {
+	return nil
+}
+
+func (p *MyProcessor2) Close() error {
+	return nil
+}
+
+type StoreBuilderImpl struct {
+}
+
+func (s *StoreBuilderImpl) Name() string {
+	return "somestore"
+}
+
+func (s *StoreBuilderImpl) Build(p int32) sdk.Store {
+	st, err := stores.NewPersistent("/tmp", "mystore", uint32(p))
+	if err != nil {
+		panic(err)
+	}
+
+	typed := sdk.NewTypedStateStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
+
+	return typed
 }

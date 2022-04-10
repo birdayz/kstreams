@@ -10,6 +10,7 @@ import (
 
 type TopologyBuilder struct {
 	processors map[string]*TopologyProcessor
+	stores     map[string]sdk.StoreBuilder
 
 	sources map[string]*TopologyProcessor
 }
@@ -29,15 +30,22 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 		return nil, errors.New("no source found")
 	}
 
-	builtProcessors := map[string]any{}
+	// TODO state stores are not per topic, we maybe have to deal with it differently so they can be shared across topics
+	var stores []sdk.Store
+	for _, store := range t.stores {
+		stores = append(stores, store.Build(tp.Partition))
+	}
+
+	builtProcessors := map[string]sdk.BaseProcessor{}
 
 	neededProcessors := appendChildren(t, src)
 
 	for _, pr := range neededProcessors {
-		x := t.processors[pr]
+		template := t.processors[pr]
 
-		built := x.Builder()
-		builtProcessors[x.Name] = built
+		built := template.Builder()
+		built.Init(stores...)
+		builtProcessors[template.Name] = built
 	}
 
 	for k, parent := range builtProcessors {
@@ -54,7 +62,7 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 		}
 	}
 
-	task := NewTask(tp.Topic, tp.Partition, builtProcessors[topic].(RecordProcessor))
+	task := NewTask(tp.Topic, tp.Partition, builtProcessors[topic].(RecordProcessor), stores)
 	return task, nil
 
 }
@@ -74,13 +82,14 @@ func appendChildren(t *TopologyBuilder, p *TopologyProcessor) []string {
 func NewTopologyBuilder() *TopologyBuilder {
 	return &TopologyBuilder{
 		processors: map[string]*TopologyProcessor{},
+		stores:     map[string]sdk.StoreBuilder{},
 		sources:    map[string]*TopologyProcessor{},
 	}
 }
 
 type TopologyProcessor struct {
 	Name    string
-	Builder func() any // Process0r -> "User processor"
+	Builder func() sdk.BaseProcessor // Process0r -> "User processor"
 	Type    reflect.Type
 
 	ChildProcessors []string
@@ -93,9 +102,10 @@ func MustAddSource[K, V any](t *TopologyBuilder, name string, topic string, keyD
 }
 
 func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) error {
+	// TODO treat source as non-processor
 	topoSource := &TopologyProcessor{
 		Name: name,
-		Builder: func() any {
+		Builder: func() sdk.BaseProcessor {
 			return &SourceNode[K, V]{KeyDeserializer: keyDeserializer, ValueDeserializer: valueDeserializer}
 		},
 		AddChildFunc: func(parent, child any) {
@@ -139,7 +149,7 @@ func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.Proces
 func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout]) error {
 	topoProcessor := &TopologyProcessor{
 		Name: p.Name(),
-		Builder: func() any {
+		Builder: func() sdk.BaseProcessor {
 			px := &Process0rNode[Kin, Vin, Kout, Vout]{
 				processor: p.Build(),
 				outputs:   map[string]GenericProcessor[Kout, Vout]{},

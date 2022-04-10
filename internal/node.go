@@ -29,3 +29,11 @@ func (p *Process0rNode[Kin, Vin, Kout, Vout]) Process(k Kin, v Vin) error {
 
 	return firstError
 }
+
+func (p *Process0rNode[Kin, Vin, Kout, Vout]) Init(stores ...sdk.Store) error {
+	return p.processor.Init(stores...)
+}
+
+func (p *Process0rNode[Kin, Vin, Kout, Vout]) Close() error {
+	return nil
+}

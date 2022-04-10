@@ -8,7 +8,13 @@ type Context[Kout any, Vout any] interface {
 	Forward(k Kout, v Vout)
 }
 
+type BaseProcessor interface {
+	Init(stores ...Store) error
+	Close() error
+}
+
 type Processor[Kin any, Vin any, Kout any, Vout any] interface {
+	BaseProcessor
 	Process(ctx Context[Kout, Vout], k Kin, v Vin) error
 }
 
@@ -104,3 +110,8 @@ func (t *GenericStateStore[K, V]) Get(k K) (V, error) {
 }
 
 var ErrNotFound = errors.New("store: not found")
+
+type StoreBuilder interface {
+	Name() string
+	Build(partition int32) Store
+}

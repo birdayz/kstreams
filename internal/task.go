@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/birdayz/streamz/sdk"
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -12,6 +13,8 @@ import (
 
 type Task struct {
 	rootNode RecordProcessor // must be slice actually
+
+	stores []sdk.Store
 
 	topic     string
 	partition int32
@@ -75,9 +78,10 @@ func (t *Task) Commit(client *kgo.Client, log *zerolog.Logger) error {
 	return nil
 }
 
-func NewTask(topic string, partition int32, rootNode RecordProcessor) *Task {
+func NewTask(topic string, partition int32, rootNode RecordProcessor, stores []sdk.Store) *Task {
 	return &Task{
 		rootNode:  rootNode,
+		stores:    stores,
 		topic:     topic,
 		partition: partition,
 	}
