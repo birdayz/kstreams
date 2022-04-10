@@ -207,15 +207,18 @@ func (r *StreamRoutine) Loop() {
 
 			go func() {
 				// Wait until this is closed
-				for item := range r.assignedOrRevoked {
-					for topic, partitions := range item.Revoked {
-						tp := TopicPartition{}
-
-					}
+				for range r.assignedOrRevoked {
 					// TODO: OnRevoke: do commit here if needed
 				}
 				wg.Done()
 			}()
+
+			for _, task := range r.Tasks {
+				if err := task.Commit(r.client, r.log); err != nil {
+					r.log.Error().Err(err).Msg("Failed to commit")
+				}
+
+			}
 
 			r.client.Close()
 			close(r.assignedOrRevoked) // Can close this only after client is closed, as the client writer to that channel
