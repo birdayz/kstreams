@@ -49,13 +49,12 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 
 func NewPersistent(stateDir, name string, partition uint32) (sdk.KeyValueByteStore, error) {
 	if stateDir == "" {
-		stateDir = "stores"
+		stateDir = "/tmp/streamz"
 	}
 	dir := fmt.Sprintf("%s/%s/partition-%d", stateDir, name, partition)
-	fmt.Println(dir)
 	db, err := pebble.Open(dir, &pebble.Options{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open %s: %w", dir, err)
 	}
 
 	return &pebbleStore{db: db}, nil
