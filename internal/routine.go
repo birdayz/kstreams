@@ -240,7 +240,6 @@ func (r *StreamRoutine) Loop() {
 		// once all tasks are ready
 		case StatePartitionsAssigned:
 			// Handle revoked
-
 			for topic, partitions := range r.newlyRevoked {
 				for _, partition := range partitions {
 					tp := TopicPartition{

@@ -18,10 +18,7 @@ type Processor[Kin any, Vin any, Kout any, Vout any] interface {
 	Process(ctx Context[Kout, Vout], k Kin, v Vin) error
 }
 
-type ProcessorBuilder[Kin any, Vin any, Kout any, Vout any] interface {
-	Name() string
-	Build() Processor[Kin, Vin, Kout, Vout]
-}
+type ProcessorBuilder[Kin any, Vin any, Kout any, Vout any] func() Processor[Kin, Vin, Kout, Vout]
 
 type Serializer[T any] func(T) ([]byte, error)
 
@@ -111,7 +108,4 @@ func (t *GenericStateStore[K, V]) Get(k K) (V, error) {
 
 var ErrNotFound = errors.New("store: not found")
 
-type StoreBuilder interface {
-	Name() string
-	Build(partition int32) Store
-}
+type StoreBuilder func(partition int32) Store

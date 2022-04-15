@@ -29,21 +29,21 @@ func main() {
 	// Move all internal stuff to public api
 	t := streamz.NewTopologyBuilder()
 
-	streamz.RegisterStore(t, &StoreBuilderImpl{})
+	streamz.RegisterStore(t, func(p int32) sdk.Store {
+		st, err := stores.NewPersistent("/tmp", "mystore", uint32(p))
+		if err != nil {
+			panic(err)
+		}
+
+		typed := sdk.NewTypedStateStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
+
+		return typed
+
+	}, "my-store")
 
 	streamz.RegisterSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
 
-	p := streamz.NewProcessorBuilder("processor-1", NewMyProcessor)
-	p2 := streamz.NewProcessorBuilder("processor-2", func() sdk.Processor[string, string, string, string] {
-		return &MyProcessor2{}
-	})
-
-	streamz.RegisterProcessor(t, p, "my-topic")
-	streamz.RegisterProcessor(t, p2, "processor-1")
-	streamz.RegisterProcessorFunc(t, func(ctx sdk.Context[string, string], k string, v string) error {
-		fmt.Printf("This is a simple in-line processor function. Received K=%s,V=%s\n", k, v)
-		return nil
-	}, "processor-3", "processor-2")
+	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic")
 
 	str := streamz.New(t, streamz.WithNumRoutines(10))
 

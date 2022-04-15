@@ -33,7 +33,7 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 	// TODO state stores are not per topic, we maybe have to deal with it differently so they can be shared across topics
 	var stores []sdk.Store
 	for _, store := range t.stores {
-		stores = append(stores, store.Build(tp.Partition))
+		stores = append(stores, store(tp.Partition))
 	}
 
 	builtProcessors := map[string]sdk.BaseProcessor{}
@@ -142,16 +142,16 @@ func must(err error) {
 	}
 }
 
-func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout]) {
-	must(AddProcessor(t, p))
+func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string) {
+	must(AddProcessor(t, p, name))
 }
 
-func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout]) error {
+func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string) error {
 	topoProcessor := &TopologyProcessor{
-		Name: p.Name(),
+		Name: name,
 		Builder: func() sdk.BaseProcessor {
 			px := &Process0rNode[Kin, Vin, Kout, Vout]{
-				processor: p.Build(),
+				processor: p(),
 				outputs:   map[string]GenericProcessor[Kout, Vout]{},
 				ctx: &ProcessorContext[Kout, Vout]{
 					outputs:      map[string]GenericProcessor[Kout, Vout]{},
@@ -178,11 +178,11 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 		parentNode.ctx.outputs["childa"] = childNode
 	}
 
-	if _, found := t.processors[p.Name()]; found {
+	if _, found := t.processors[name]; found {
 		return ErrNodeAlreadyExists
 	}
 
-	t.processors[p.Name()] = topoProcessor
+	t.processors[name] = topoProcessor
 
 	return nil
 }
