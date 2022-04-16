@@ -20,5 +20,3 @@ require (
 	github.com/twmb/go-rbtree v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 )
-
-replace github.com/birdayz/streamz/stores => ./stores
