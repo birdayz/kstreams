@@ -9,10 +9,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"go.uber.org/multierr"
 )
 
 type Task struct {
-	rootNode RecordProcessor // must be slice actually
+	rootNodes map[string]RecordProcessor // Key = topic
 
 	stores []sdk.Store
 
@@ -25,7 +26,13 @@ type Task struct {
 
 func (t *Task) Process(records ...*kgo.Record) error {
 	for _, record := range records {
-		if err := t.rootNode.Process(record); err != nil {
+
+		p, ok := t.rootNodes[record.Topic]
+		if !ok {
+			return fmt.Errorf("unknown topic: %s", record.Topic)
+		}
+
+		if err := p.Process(record); err != nil {
 			return fmt.Errorf("failed to process record: %w", err)
 		}
 		t.comittableOffset = record.Offset + 1
@@ -35,6 +42,14 @@ func (t *Task) Process(records ...*kgo.Record) error {
 	}
 
 	return nil
+}
+
+func (t *Task) Close() error {
+	var err error
+	for _, store := range t.stores {
+		err = multierr.Append(err, store.Close())
+	}
+	return err
 }
 
 func (t *Task) Commit(client *kgo.Client, log *zerolog.Logger) error {
@@ -78,9 +93,10 @@ func (t *Task) Commit(client *kgo.Client, log *zerolog.Logger) error {
 	return nil
 }
 
-func NewTask(topic string, partition int32, rootNode RecordProcessor, stores []sdk.Store) *Task {
+// TODO: move state store init here ? so init is here, and close is managed by task as well.
+func NewTask(topic string, partition int32, rootNodes map[string]RecordProcessor, stores []sdk.Store) *Task {
 	return &Task{
-		rootNode:  rootNode,
+		rootNodes: rootNodes,
 		stores:    stores,
 		topic:     topic,
 		partition: partition,

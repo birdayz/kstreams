@@ -29,6 +29,8 @@ func main() {
 	// Move all internal stuff to public api
 	t := streamz.NewTopologyBuilder()
 
+	// TODO improve store DX with built-in wrappers around typed store, and easily accessible default
+	// stores pebble for persistent, and map for inmem
 	streamz.RegisterStore(t, func(p int32) sdk.Store {
 		st, err := stores.NewPersistent("/tmp", "mystore", uint32(p))
 		if err != nil {
@@ -43,7 +45,7 @@ func main() {
 
 	streamz.RegisterSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
 
-	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic")
+	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
 
 	str := streamz.New(t, streamz.WithNumRoutines(10))
 

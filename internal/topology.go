@@ -12,7 +12,20 @@ type TopologyBuilder struct {
 	processors map[string]*TopologyProcessor
 	stores     map[string]sdk.StoreBuilder
 
+	// Key = TopicNode
 	sources map[string]*TopologyProcessor
+
+	processorToParent map[string]string
+
+	processorToStores map[string][]string
+}
+
+// CopartitionGroup is a set of processor names
+type CopartitionGroup map[string]struct{}
+
+func (t *TopologyBuilder) findCopartitionGroups() []CopartitionGroup {
+
+	return []CopartitionGroup{}
 }
 
 func (t *TopologyBuilder) GetTopics() []string {
@@ -30,7 +43,8 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 		return nil, errors.New("no source found")
 	}
 
-	// TODO state stores are not per topic, we maybe have to deal with it differently so they can be shared across topics
+	// FIXME TODO state stores are not per topic, we maybe have to deal with it differently so they can be shared across topics
+
 	var stores []sdk.Store
 	for _, store := range t.stores {
 		stores = append(stores, store(tp.Partition))
@@ -62,7 +76,10 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 		}
 	}
 
-	task := NewTask(tp.Topic, tp.Partition, builtProcessors[topic].(RecordProcessor), stores)
+	ps := make(map[string]RecordProcessor)
+	ps[topic] = builtProcessors[topic].(RecordProcessor)
+
+	task := NewTask(tp.Topic, tp.Partition, ps, stores)
 	return task, nil
 
 }
@@ -81,9 +98,11 @@ func appendChildren(t *TopologyBuilder, p *TopologyProcessor) []string {
 
 func NewTopologyBuilder() *TopologyBuilder {
 	return &TopologyBuilder{
-		processors: map[string]*TopologyProcessor{},
-		stores:     map[string]sdk.StoreBuilder{},
-		sources:    map[string]*TopologyProcessor{},
+		processors:        map[string]*TopologyProcessor{},
+		stores:            map[string]sdk.StoreBuilder{},
+		sources:           map[string]*TopologyProcessor{},
+		processorToParent: map[string]string{},
+		processorToStores: map[string][]string{},
 	}
 }
 
@@ -142,11 +161,11 @@ func must(err error) {
 	}
 }
 
-func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string) {
-	must(AddProcessor(t, p, name))
+func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) {
+	must(AddProcessor(t, p, name, stores...))
 }
 
-func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string) error {
+func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) error {
 	topoProcessor := &TopologyProcessor{
 		Name: name,
 		Builder: func() sdk.BaseProcessor {
@@ -184,6 +203,14 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 
 	t.processors[name] = topoProcessor
 
+	for _, store := range stores {
+		if _, ok := t.stores[store]; !ok {
+			return errors.New("store not found")
+		}
+	}
+
+	t.processorToStores[name] = stores
+
 	return nil
 }
 
@@ -198,6 +225,8 @@ func SetParent(t *TopologyBuilder, parent, child string) error {
 	}
 
 	parentNode.ChildProcessors = append(parentNode.ChildProcessors, child)
+
+	t.processorToParent[child] = parent
 
 	return nil
 
