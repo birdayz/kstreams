@@ -18,14 +18,90 @@ type TopologyBuilder struct {
 	processorToParent map[string]string
 
 	processorToStores map[string][]string
+
+	childNodes map[string][]string
 }
 
-// CopartitionGroup is a set of processor names
-type CopartitionGroup map[string]struct{}
+// PartitionGroup is a set of processor names
+type PartitionGroup struct {
+	sourceTopics   []string
+	processorNames []string
+	storeNames     []string
+}
 
-func (t *TopologyBuilder) findCopartitionGroups() []CopartitionGroup {
+func (t *TopologyBuilder) findCopartitionGroups() []*PartitionGroup {
 
-	return []CopartitionGroup{}
+	var partitionGroups []*PartitionGroup
+
+	// 1. Find per partition all sub-nodes (=do DFS)
+	for topic := range t.sources { // TODO: make this deterministic, ordering of keys is random
+
+		processors := t.findAllProcessors(topic)
+
+		// 2. Check if a state store is connected to one of these nodes.
+		var storeNames []string
+		for _, child := range processors {
+			if stores, ok := t.processorToStores[child]; ok {
+				for _, store := range stores {
+					storeNames = append(storeNames, store)
+				}
+			}
+		}
+
+		pg := PartitionGroup{
+			sourceTopics:   []string{topic},
+			processorNames: processors,
+			storeNames:     storeNames,
+		}
+
+		// Build new PG
+
+		// Check if there are overlaps with other PGs. Merge PGs as needed
+
+		// fmt.Println("Got conn stores", topic, connectedStores)
+
+		// ?? check if any processor is already in other PG => Join other pg. What if multiple ? Join two
+
+		// 2.1 Check if connected state stores are already in another partition group
+
+		// 	var pgFound *PartitionGroup
+		//
+		// outer:
+		// 	for _, store := range storeNames {
+		// 		for _, pg := range partitionGroups {
+		// 			if slices.Contains(pg.sourceTopics, store) {
+		// 				pgFound = pg
+		// 				break outer
+		// 				// PG matches
+		// 			}
+		// 		}
+		// 	}
+		//
+		// 	// Stores that are in PG, stores that are not in any PG ("stores we need to take care of"/move into PG)
+		//
+		// 	if pgFound != nil {
+		// 		// 2.1a true => add this store AND these processors to "other" PG (partition group)
+		// 		pgFound.sourceTopics = append(pgFound.sourceTopics, topic)
+		// 		pgFound.processorNames = append(pgFound.processorNames, processors...)
+		// 	} else {
+		// 		// 2.1b false => Create new PG and add this stuff + state store to it
+		// 	}
+
+		partitionGroups = append(partitionGroups, &pg)
+
+	}
+
+	return partitionGroups
+}
+
+func (t *TopologyBuilder) findAllProcessors(processor string) []string {
+	res := []string{processor}
+	if children, ok := t.childNodes[processor]; ok {
+		for _, child := range children {
+			res = append(res, t.findAllProcessors(child)...)
+		}
+	}
+	return res
 }
 
 func (t *TopologyBuilder) GetTopics() []string {
@@ -103,6 +179,7 @@ func NewTopologyBuilder() *TopologyBuilder {
 		sources:           map[string]*TopologyProcessor{},
 		processorToParent: map[string]string{},
 		processorToStores: map[string][]string{},
+		childNodes:        map[string][]string{},
 	}
 }
 
@@ -227,6 +304,13 @@ func SetParent(t *TopologyBuilder, parent, child string) error {
 	parentNode.ChildProcessors = append(parentNode.ChildProcessors, child)
 
 	t.processorToParent[child] = parent
+
+	_, ok = t.childNodes[parent]
+	if !ok {
+		t.childNodes[parent] = []string{}
+	}
+
+	t.childNodes[parent] = append(t.childNodes[parent], child)
 
 	return nil
 

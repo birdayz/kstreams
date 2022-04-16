@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/streamz/sdk"
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestGroup(t *testing.T) {
@@ -33,15 +34,22 @@ func TestGroup(t *testing.T) {
 
 	err = AddProcessor(top, func() sdk.Processor[string, string, string, string] {
 		return &MyProcessor{}
+	}, "myprocessor-2")
+	assert.NoError(t, err)
+	err = SetParent(top, "myprocessor", "myprocessor-2")
+
+	err = AddProcessor(top, func() sdk.Processor[string, string, string, string] {
+		return &MyProcessor{}
 	}, "secondprocessor", "mystore")
 	assert.NoError(t, err)
 	err = SetParent(top, "secondsource", "secondprocessor")
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, map[string][]string{"myprocessor": {"mystore"}, "secondprocessor": {"mystore"}}, top.processorToStores)
+	assert.Equal(t, map[string][]string{"myprocessor": {"mystore"}, "secondprocessor": {"mystore"}, "myprocessor-2": nil}, top.processorToStores)
 
-	//top.findCopartitionGroups()
+	cop := top.findCopartitionGroups()
+	spew.Dump(cop)
 
 }
 

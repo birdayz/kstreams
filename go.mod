@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/alecthomas/assert/v2 v2.0.2
+	github.com/davecgh/go-spew v1.1.1
 	github.com/rs/zerolog v1.26.1
 	github.com/twmb/franz-go v1.4.2
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
@@ -19,4 +20,5 @@ require (
 	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/twmb/go-rbtree v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
+	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd // indirect
 )
