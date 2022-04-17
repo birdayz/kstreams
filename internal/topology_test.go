@@ -48,8 +48,14 @@ func TestGroup(t *testing.T) {
 
 	assert.Equal(t, map[string][]string{"myprocessor": {"mystore"}, "secondprocessor": {"mystore"}, "myprocessor-2": nil}, top.processorToStores)
 
-	cop := top.findCopartitionGroups()
-	spew.Dump(cop)
+	pgs := top.partitionGroups()
+	spew.Dump(pgs)
+
+	assert.Equal(t, []*PartitionGroup{{
+		sourceTopics:   []string{"mysource", "secondsource"},
+		processorNames: []string{"myprocessor", "myprocessor-2", "secondprocessor"},
+		storeNames:     []string{"mystore"},
+	}}, pgs)
 
 }
 

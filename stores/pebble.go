@@ -28,7 +28,7 @@ func (s *pebbleStore) Close() error {
 }
 
 func (s *pebbleStore) Set(k, v []byte) error {
-	return s.db.Set(k, v, &pebble.WriteOptions{Sync: true})
+	return s.db.Set(k, v, &pebble.WriteOptions{Sync: false})
 }
 
 func (s *pebbleStore) Get(k []byte) ([]byte, error) {

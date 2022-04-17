@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/birdayz/streamz/sdk"
+	"golang.org/x/exp/slices"
 )
 
 type TopologyBuilder struct {
@@ -29,9 +30,74 @@ type PartitionGroup struct {
 	storeNames     []string
 }
 
-func (t *TopologyBuilder) findCopartitionGroups() []*PartitionGroup {
+// Contains reports whether v is present in s.
+func ContainsAny[E comparable](s []E, v []E) bool {
+	for _, item := range s {
+		for _, check := range v {
+			if item == check {
+				return true
+			}
+		}
+	}
 
-	var partitionGroups []*PartitionGroup
+	return false
+}
+
+func mergeIteration(pgs []*PartitionGroup) (altered []*PartitionGroup, done bool) {
+	var a, b int
+
+	var dirty bool
+outer:
+	for i, pg := range pgs {
+
+		for d, otherPg := range pgs {
+			if i == d {
+				continue
+			}
+			if ContainsAny(otherPg.sourceTopics, pg.sourceTopics) || ContainsAny(otherPg.processorNames, pg.processorNames) || ContainsAny(otherPg.storeNames, pg.storeNames) {
+				a = i
+				b = d
+				dirty = true
+				break outer
+			}
+		}
+	}
+
+	// Clean, return
+	if !dirty {
+		return pgs, true
+	}
+
+	// "Sort" so it's deterministic.
+	if a < b {
+		a, b = b, a
+	}
+
+	// Merge b into a.
+	pgA := pgs[a]
+	pgB := pgs[b]
+
+	pgA.sourceTopics = slices.Compact(append(pgA.sourceTopics, pgB.sourceTopics...))
+	pgA.processorNames = slices.Compact(append(pgA.processorNames, pgB.processorNames...))
+	pgA.storeNames = slices.Compact(append(pgA.storeNames, pgB.storeNames...))
+
+	pgs = slices.Delete(pgs, b, b+1)
+
+	return pgs, false
+}
+
+func mergePartitionGroups(pgs []*PartitionGroup) []*PartitionGroup {
+	finished := false
+	for !finished {
+		pgs, finished = mergeIteration(pgs)
+	}
+
+	return pgs
+}
+
+func (t *TopologyBuilder) partitionGroups() []*PartitionGroup {
+
+	var pgs []*PartitionGroup
 
 	// 1. Find per partition all sub-nodes (=do DFS)
 	for topic := range t.sources { // TODO: make this deterministic, ordering of keys is random
@@ -48,56 +114,31 @@ func (t *TopologyBuilder) findCopartitionGroups() []*PartitionGroup {
 			}
 		}
 
-		pg := PartitionGroup{
+		pg := &PartitionGroup{
 			sourceTopics:   []string{topic},
 			processorNames: processors,
 			storeNames:     storeNames,
 		}
 
-		// Build new PG
-
-		// Check if there are overlaps with other PGs. Merge PGs as needed
-
-		// fmt.Println("Got conn stores", topic, connectedStores)
-
-		// ?? check if any processor is already in other PG => Join other pg. What if multiple ? Join two
-
-		// 2.1 Check if connected state stores are already in another partition group
-
-		// 	var pgFound *PartitionGroup
-		//
-		// outer:
-		// 	for _, store := range storeNames {
-		// 		for _, pg := range partitionGroups {
-		// 			if slices.Contains(pg.sourceTopics, store) {
-		// 				pgFound = pg
-		// 				break outer
-		// 				// PG matches
-		// 			}
-		// 		}
-		// 	}
-		//
-		// 	// Stores that are in PG, stores that are not in any PG ("stores we need to take care of"/move into PG)
-		//
-		// 	if pgFound != nil {
-		// 		// 2.1a true => add this store AND these processors to "other" PG (partition group)
-		// 		pgFound.sourceTopics = append(pgFound.sourceTopics, topic)
-		// 		pgFound.processorNames = append(pgFound.processorNames, processors...)
-		// 	} else {
-		// 		// 2.1b false => Create new PG and add this stuff + state store to it
-		// 	}
-
-		partitionGroups = append(partitionGroups, &pg)
-
+		pgs = append(pgs, pg)
 	}
 
-	return partitionGroups
+	pgs = mergePartitionGroups(pgs)
+
+	for _, pg := range pgs {
+		slices.Sort(pg.sourceTopics)
+		slices.Sort(pg.processorNames)
+		slices.Sort(pg.storeNames)
+	}
+
+	return pgs
 }
 
 func (t *TopologyBuilder) findAllProcessors(processor string) []string {
-	res := []string{processor}
+	var res []string
 	if children, ok := t.childNodes[processor]; ok {
 		for _, child := range children {
+			res = append(res, child)
 			res = append(res, t.findAllProcessors(child)...)
 		}
 	}
@@ -112,33 +153,95 @@ func (t *TopologyBuilder) GetTopics() []string {
 	return res
 }
 
-func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
-	topic := tp.Topic
-	src, ok := t.processors[topic]
-	if !ok {
-		return nil, errors.New("no source found")
+// NewTasks returns fresh tasks for given topic partitions. It honors
+// the topology and partition groups derived from it.
+func (t *TopologyBuilder) NewTasks(assigned map[string][]int32) ([]*Task, error) {
+	var tasks []*Task
+	pgs := t.partitionGroups()
+
+	// todo - ensure co-partitioning
+
+	// validate we know these topics
+	for topic := range assigned {
+		var found bool
+
+		for _, pg := range pgs {
+			if slices.Contains(pg.sourceTopics, topic) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return nil, fmt.Errorf("could not find partition group for assigned topic %s", topic)
+		}
+	}
+
+	for _, pg := range pgs {
+		var topicMissing bool
+		for _, topic := range pg.sourceTopics {
+			_, found := assigned[topic]
+			if !found {
+				break
+			}
+		}
+
+		if topicMissing {
+			fmt.Println("Topic missing for pg, ignoring")
+			continue
+		}
+
+		// FIXME ensure same p's assigned within co-partition group.
+		for _, partition := range assigned[pg.sourceTopics[0]] {
+			task, err := t.CreateTask(pg.sourceTopics, partition)
+			if err != nil {
+				panic(err)
+			}
+			tasks = append(tasks, task)
+		}
+
+	}
+
+	return tasks, nil
+}
+
+// know how they are co partitioned
+func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, error) {
+	var srcs []*TopologyProcessor
+
+	for _, topic := range topics {
+		src, ok := t.processors[topic]
+		if !ok {
+			return nil, errors.New("no source found")
+		}
+		srcs = append(srcs, src)
 	}
 
 	// FIXME TODO state stores are not per topic, we maybe have to deal with it differently so they can be shared across topics
 
 	var stores []sdk.Store
 	for _, store := range t.stores {
-		stores = append(stores, store(tp.Partition))
+		stores = append(stores, store(partition))
 	}
 
 	builtProcessors := map[string]sdk.BaseProcessor{}
 
-	neededProcessors := appendChildren(t, src)
+	var neededProcessors []string
+	for _, src := range srcs {
+		neededProcessors = append(neededProcessors, appendChildren(t, src)...)
+	}
+	neededProcessors = slices.Compact(neededProcessors)
 
 	for _, pr := range neededProcessors {
-		template := t.processors[pr]
+		topoProcessor := t.processors[pr]
 
-		built := template.Builder()
-		built.Init(stores...)
-		builtProcessors[template.Name] = built
+		built := topoProcessor.Builder()
+
+		built.Init(stores...) // TODO move init into task. Topo only creates, task inits closes
+		builtProcessors[topoProcessor.Name] = built
 	}
 
-	for k, parent := range builtProcessors {
+	for k, builtProcessor := range builtProcessors {
 		parentNode := t.processors[k]
 
 		for _, childNodeName := range parentNode.ChildProcessors {
@@ -148,14 +251,16 @@ func (t *TopologyBuilder) CreateTask(tp TopicPartition) (*Task, error) {
 			if !ok {
 				return nil, fmt.Errorf("processor %s not found", childNode.Name)
 			}
-			parentNode.AddChildFunc(parent, child)
+			parentNode.AddChildFunc(builtProcessor, child)
 		}
 	}
 
 	ps := make(map[string]RecordProcessor)
-	ps[topic] = builtProcessors[topic].(RecordProcessor)
+	for _, topic := range topics {
+		ps[topic] = builtProcessors[topic].(RecordProcessor)
+	}
 
-	task := NewTask(tp.Topic, tp.Partition, ps, stores)
+	task := NewTask(topics, partition, ps, stores)
 	return task, nil
 
 }

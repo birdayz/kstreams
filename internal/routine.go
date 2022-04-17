@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"golang.org/x/exp/slices"
 )
 
 type RoutineState string
@@ -29,7 +30,7 @@ type StreamRoutine struct {
 	log         *zerolog.Logger
 	group       string
 
-	Tasks map[TopicPartition]*Task
+	Tasks []*Task
 
 	t *TopologyBuilder
 
@@ -68,6 +69,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
+		// Add balancer
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
@@ -91,7 +93,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 		group:             group,
 		client:            client,
 		adminClient:       kadm.NewClient(client),
-		Tasks:             map[TopicPartition]*Task{},
+		Tasks:             []*Task{},
 		t:                 t,
 		state:             StateCreated,
 		assignedOrRevoked: par,
@@ -156,23 +158,33 @@ func (r *StreamRoutine) handleRunning() {
 
 	f.EachPartition(func(ftp kgo.FetchTopicPartition) {
 
-		tp := TopicPartition{
-			Topic:     ftp.Topic,
-			Partition: ftp.Partition,
-		}
+		// tp := TopicPartition{
+		// 	Topic:     ftp.Topic,
+		// 	Partition: ftp.Partition,
+		// }
 
 		// TODO Can actually happen, before we get the info that partions have been assigned
-		task, ok := r.Tasks[tp]
-		if !ok {
-			panic("task not found")
+		var task *Task
+		for _, i := range r.Tasks {
+			if ftp.Partition == i.partition && slices.Contains(i.topics, ftp.Topic) {
+				task = i
+			}
 		}
+
+		if task == nil {
+			panic("no task for record found")
+		}
+		// task, ok := r.Tasks[tp]
+		// if !ok {
+		// 	panic("task not found")
+		// }
 
 		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Msg("Processing")
 		count := 0
 		ftp.EachRecord(func(rec *kgo.Record) {
 			count++
 			if err := task.Process(rec); err != nil {
-				r.log.Error().Msg("Failed to process record")
+				r.log.Error().Err(err).Msg("Failed to process record")
 				r.changeState(StateCloseRequested)
 				return
 			}
@@ -215,7 +227,11 @@ func (r *StreamRoutine) Loop() {
 
 			for _, task := range r.Tasks {
 				if err := task.Commit(r.client, r.log); err != nil {
-					r.log.Error().Err(err).Msg("Failed to commit")
+					r.log.Error().Err(err).Msg("Failed to commit task")
+				}
+
+				if err := task.Close(); err != nil {
+					r.log.Error().Err(err).Msg("Failed to close task")
 				}
 
 			}
@@ -239,40 +255,20 @@ func (r *StreamRoutine) Loop() {
 		// In State PartitionsAssigned, tasks are set up. it transists to RUNNING
 		// once all tasks are ready
 		case StatePartitionsAssigned:
-			// Handle revoked
-			for topic, partitions := range r.newlyRevoked {
-				for _, partition := range partitions {
-					tp := TopicPartition{
-						Topic:     topic,
-						Partition: partition,
-					}
+			// TODO implement revoked. find matching tasks
 
-					_, ok := r.Tasks[tp]
-					if !ok {
-						panic("should not happen. did not find task for revoked partition")
-					}
-					delete(r.Tasks, tp)
-					r.log.Warn().Str("topic", tp.Topic).Int32("partition", tp.Partition).Msg("Removed Task")
-					// TODO possibly add Close() call to task?
-				}
+			// Validate that assignments were uniform
+
+			tasks, err := r.t.NewTasks(r.newlyAssigned)
+			if err != nil {
+				panic(err)
 			}
 
-			for topic, partitions := range r.newlyAssigned {
-				for _, partition := range partitions {
-					tp := TopicPartition{
-						Topic:     topic,
-						Partition: partition,
-					}
-					task, err := r.t.CreateTask(tp)
-					if err != nil {
-						panic(err)
-					}
-
-					r.Tasks[tp] = task
-					r.log.Debug().Str("topic", tp.Topic).Int32("partition", tp.Partition).Msg("Created Task")
-				}
-
+			for _, task := range tasks {
+				_ = task.Init() // TODO
 			}
+
+			r.Tasks = append(r.Tasks, tasks...) // TODO - replace?
 
 			r.newlyAssigned = nil
 			r.newlyRevoked = nil

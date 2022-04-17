@@ -47,7 +47,7 @@ func main() {
 
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
 
-	str := streamz.New(t, streamz.WithNumRoutines(10))
+	str := streamz.New(t, streamz.WithNumRoutines(1))
 
 	log.Info().Msg("Start streamz")
 	str.Start()
