@@ -260,7 +260,7 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, e
 		ps[topic] = builtProcessors[topic].(RecordProcessor)
 	}
 
-	task := NewTask(topics, partition, ps, stores)
+	task := NewTask(topics, partition, ps, stores, builtProcessors)
 	return task, nil
 
 }

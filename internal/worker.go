@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"golang.org/x/exp/slices"
 )
 
 type RoutineState string
@@ -24,13 +23,11 @@ const (
 )
 
 // Nice read https://jaceklaskowski.gitbooks.io/mastering-kafka-streams/content/kafka-streams-internals-StreamThread.html
-type StreamRoutine struct {
+type Worker struct {
 	client      *kgo.Client
 	adminClient *kadm.Client
 	log         *zerolog.Logger
 	group       string
-
-	Tasks []*Task
 
 	t *TopologyBuilder
 
@@ -51,6 +48,8 @@ type StreamRoutine struct {
 	closed sync.WaitGroup
 
 	maxPollRecords int
+
+	taskManager *TaskManager
 }
 
 type AssignedOrRevoked struct {
@@ -59,7 +58,7 @@ type AssignedOrRevoked struct {
 }
 
 // Config
-func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []string) (*StreamRoutine, error) {
+func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) (*Worker, error) {
 	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
 
 	// Close hangs if this channel is full/not read
@@ -70,6 +69,7 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
 		// Add balancer
+		kgo.Balancers(&streamzBalancer{}),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
@@ -87,29 +87,35 @@ func NewStreamRoutine(name string, t *TopologyBuilder, group string, brokers []s
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
 	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
 
-	sr := &StreamRoutine{
+	sr := &Worker{
 		name:              name,
 		log:               &log,
 		group:             group,
 		client:            client,
 		adminClient:       kadm.NewClient(client),
-		Tasks:             []*Task{},
 		t:                 t,
 		state:             StateCreated,
 		assignedOrRevoked: par,
 		closeRequested:    make(chan struct{}, 1),
 		maxPollRecords:    10000,
+		taskManager: &TaskManager{
+			tasks:    []*Task{},
+			client:   client,
+			log:      &log,
+			topology: t,
+			pgs:      t.partitionGroups(),
+		},
 	}
 	sr.closed.Add(1)
 	return sr, nil
 }
 
-func (r *StreamRoutine) changeState(newState RoutineState) {
+func (r *Worker) changeState(newState RoutineState) {
 	r.log.Info().Str("from", string(r.state)).Str("to", string(newState)).Msg("Change state")
 	r.state = newState
 }
 
-func (r *StreamRoutine) Start() {
+func (r *Worker) Start() {
 	go func() {
 		labels := pprof.Labels("routine-name", r.name)
 		pprof.Do(context.Background(), labels, func(c context.Context) {
@@ -118,7 +124,7 @@ func (r *StreamRoutine) Start() {
 	}()
 }
 
-func (r *StreamRoutine) handleRunning() {
+func (r *Worker) handleRunning() {
 	r.cancelPollMtx.Lock()
 
 	select {
@@ -156,40 +162,24 @@ func (r *StreamRoutine) handleRunning() {
 		return
 	}
 
-	f.EachPartition(func(ftp kgo.FetchTopicPartition) {
-
-		// tp := TopicPartition{
-		// 	Topic:     ftp.Topic,
-		// 	Partition: ftp.Partition,
-		// }
-
-		// TODO Can actually happen, before we get the info that partions have been assigned
-		var task *Task
-		for _, i := range r.Tasks {
-			if ftp.Partition == i.partition && slices.Contains(i.topics, ftp.Topic) {
-				task = i
-			}
+	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
+		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
+		if err != nil {
+			r.log.Error().Err(err).Msg("failed to get task")
+			return
 		}
 
-		if task == nil {
-			panic("no task for record found")
-		}
-		// task, ok := r.Tasks[tp]
-		// if !ok {
-		// 	panic("task not found")
-		// }
-
-		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Msg("Processing")
+		r.log.Debug().Str("topic", fetch.Topic).Int32("partition", fetch.Partition).Msg("Processing")
 		count := 0
-		ftp.EachRecord(func(rec *kgo.Record) {
+		fetch.EachRecord(func(record *kgo.Record) {
 			count++
-			if err := task.Process(rec); err != nil {
+			if err := task.Process(record); err != nil {
 				r.log.Error().Err(err).Msg("Failed to process record")
 				r.changeState(StateCloseRequested)
 				return
 			}
 		})
-		r.log.Debug().Str("topic", ftp.Topic).Int32("partition", ftp.Partition).Int("count", count).Msg("Processed")
+		r.log.Debug().Str("topic", fetch.Topic).Int32("partition", fetch.Partition).Int("count", count).Msg("Processed")
 
 		if err := task.Commit(r.client, r.log); err != nil {
 			r.changeState(StateCloseRequested)
@@ -199,12 +189,31 @@ func (r *StreamRoutine) handleRunning() {
 	})
 }
 
-func (r *StreamRoutine) handleClosed() {
+func (r *Worker) handleClosed() {
 	r.closed.Done()
 }
 
+func (r *Worker) handlePartitionsAssigned() {
+	if err := r.taskManager.Revoked(r.newlyRevoked); err != nil {
+		r.log.Error().Err(err).Msg("revoked failed")
+	}
+
+	if err := r.taskManager.Assigned(r.newlyAssigned); err != nil {
+		r.log.Error().Err(err).Msg("assigned failed")
+	}
+
+	r.newlyAssigned = nil
+	r.newlyRevoked = nil
+
+	if len(r.taskManager.tasks) > 0 {
+		r.changeState(StateRunning)
+	} else {
+		r.changeState(StateCreated)
+	}
+}
+
 // State transitions may only be done from within the loop
-func (r *StreamRoutine) Loop() {
+func (r *Worker) Loop() {
 	for {
 		switch r.state {
 		case StateClosed:
@@ -225,15 +234,9 @@ func (r *StreamRoutine) Loop() {
 				wg.Done()
 			}()
 
-			for _, task := range r.Tasks {
-				if err := task.Commit(r.client, r.log); err != nil {
-					r.log.Error().Err(err).Msg("Failed to commit task")
-				}
-
-				if err := task.Close(); err != nil {
-					r.log.Error().Err(err).Msg("Failed to close task")
-				}
-
+			err := r.taskManager.Close()
+			if err != nil {
+				r.log.Error().Err(err).Msg("Failed to close tasks")
 			}
 
 			r.client.Close()
@@ -255,30 +258,7 @@ func (r *StreamRoutine) Loop() {
 		// In State PartitionsAssigned, tasks are set up. it transists to RUNNING
 		// once all tasks are ready
 		case StatePartitionsAssigned:
-			// TODO implement revoked. find matching tasks
-
-			// Validate that assignments were uniform
-
-			tasks, err := r.t.NewTasks(r.newlyAssigned)
-			if err != nil {
-				panic(err)
-			}
-
-			for _, task := range tasks {
-				_ = task.Init() // TODO
-			}
-
-			r.Tasks = append(r.Tasks, tasks...) // TODO - replace?
-
-			r.newlyAssigned = nil
-			r.newlyRevoked = nil
-
-			if len(r.Tasks) > 0 {
-				r.changeState(StateRunning)
-			} else {
-				r.changeState(StateCreated)
-			}
-			continue
+			r.handlePartitionsAssigned()
 		case StateRunning:
 			r.handleRunning()
 		}
@@ -286,7 +266,7 @@ func (r *StreamRoutine) Loop() {
 	}
 }
 
-func (r *StreamRoutine) Close() error {
+func (r *Worker) Close() error {
 	r.log.Debug().Msg("Close")
 
 	r.log.Debug().Msg("cancel")

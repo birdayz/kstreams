@@ -22,6 +22,8 @@ type Task struct {
 
 	needCommit         bool
 	committableOffsets map[string]int64 // Topic => offset
+
+	processors map[string]sdk.BaseProcessor
 }
 
 func (t *Task) Process(records ...*kgo.Record) error {
@@ -46,9 +48,15 @@ func (t *Task) Process(records ...*kgo.Record) error {
 
 func (t *Task) Init() error {
 	var multierror error
+
+	for _, processor := range t.processors {
+		multierr.Append(multierror, processor.Init())
+	}
+
 	for _, store := range t.stores {
 		multierr.Append(multierror, store.Init())
 	}
+
 	return multierror
 }
 
@@ -103,7 +111,7 @@ func (t *Task) Commit(client *kgo.Client, log *zerolog.Logger) error {
 }
 
 // TODO: move state store init here ? so init is here, and close is managed by task as well.
-func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores []sdk.Store) *Task {
+func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores []sdk.Store, processors map[string]sdk.BaseProcessor) *Task {
 	// TODO init procs with stores ?
 	return &Task{
 		rootNodes:          rootNodes,
@@ -111,5 +119,6 @@ func NewTask(topics []string, partition int32, rootNodes map[string]RecordProces
 		topics:             topics,
 		partition:          partition,
 		committableOffsets: map[string]int64{},
+		processors:         processors,
 	}
 }

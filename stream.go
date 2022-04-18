@@ -15,7 +15,7 @@ type Streamz struct {
 	groupName   string
 	t           *internal.TopologyBuilder // change to topology
 
-	routines []*internal.StreamRoutine
+	routines []*internal.Worker
 }
 
 var WithNumRoutines = func(n int) Option {
@@ -30,7 +30,7 @@ func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
 		brokers:     []string{"localhost:9092"},
 		groupName:   "streamz-app",
 		t:           t,
-		routines:    []*internal.StreamRoutine{},
+		routines:    []*internal.Worker{},
 	}
 
 	for _, opt := range opts {
@@ -42,7 +42,7 @@ func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
 
 func (c *Streamz) Start() error {
 	for i := 0; i < c.numRoutines; i++ {
-		routine, err := internal.NewStreamRoutine(fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
+		routine, err := internal.NewWorker(fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func (c *Streamz) Close() error {
 	var wg sync.WaitGroup
 	for _, routine := range c.routines {
 		wg.Add(1)
-		go func(routine *internal.StreamRoutine) {
+		go func(routine *internal.Worker) {
 			routine.Close()
 			wg.Done()
 		}(routine)
