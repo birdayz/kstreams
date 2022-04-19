@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/multierr"
@@ -26,7 +27,7 @@ type pgPartitions struct {
 	partitions     []int32
 }
 
-func (t *TaskManager) findPGs(assignedOrRevoked map[string][]int32) ([]*pgPartitions, error) {
+func (t *TaskManager) matchingPGs(assignedOrRevoked map[string][]int32) ([]*PartitionGroup, error) {
 	var matchingPGs []*PartitionGroup
 
 	// For each pg, check if its required topics are there
@@ -49,6 +50,15 @@ func (t *TaskManager) findPGs(assignedOrRevoked map[string][]int32) ([]*pgPartit
 
 		// All source topics of the TP found => Great!
 		matchingPGs = append(matchingPGs, pg)
+	}
+
+	return matchingPGs, nil
+}
+
+func (t *TaskManager) findPGs(assignedOrRevoked map[string][]int32) ([]*pgPartitions, error) {
+	matchingPGs, err := t.matchingPGs(assignedOrRevoked)
+	if err != nil {
+		return nil, err
 	}
 
 	var res []*pgPartitions
@@ -89,15 +99,14 @@ func (t *TaskManager) Assigned(assigned map[string][]int32) error {
 				return errors.New("failed to create task")
 			}
 
+			fmt.Println("Created", pg.partitionGroup.sourceTopics, partition)
+
 			t.tasks = append(t.tasks, task)
 		}
 
 	}
 
 	return nil
-}
-
-func (t *TaskManager) partitionMapping() {
 }
 
 // Revoked closes and removes tasks as dictated per revoked map.
@@ -113,7 +122,9 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 			// Find task
 			found := false
 			for i, task := range t.tasks {
+				fmt.Println("iter", task.topics, task.partition)
 				if slices.Equal(task.topics, pg.partitionGroup.sourceTopics) && task.partition == partition {
+					found = true
 					if err := task.Close(); err != nil {
 						return err
 					}
@@ -121,6 +132,8 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 				}
 			}
 			if !found {
+				spew.Dump(revoked)
+				spew.Dump(matchingPGs)
 				return errors.New("could not find task to close/revoke")
 			}
 		}

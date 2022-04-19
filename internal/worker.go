@@ -60,6 +60,16 @@ type AssignedOrRevoked struct {
 // Config
 func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) (*Worker, error) {
 	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
+	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
+
+	tm := &TaskManager{
+		tasks:    []*Task{},
+		log:      &log,
+		topology: t,
+		pgs:      t.partitionGroups(),
+	}
 
 	// Close hangs if this channel is full/not read
 	par := make(chan AssignedOrRevoked)
@@ -69,7 +79,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
 		// Add balancer
-		kgo.Balancers(&streamzBalancer{}),
+		kgo.Balancers(&streamzBalancer{topics: topics, t: tm}),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
@@ -83,9 +93,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		return nil, err
 	}
 
-	zerolog.TimeFieldFormat = time.RFC3339Nano
-	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
-	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
+	tm.client = client
 
 	sr := &Worker{
 		name:              name,
@@ -98,13 +106,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		assignedOrRevoked: par,
 		closeRequested:    make(chan struct{}, 1),
 		maxPollRecords:    10000,
-		taskManager: &TaskManager{
-			tasks:    []*Task{},
-			client:   client,
-			log:      &log,
-			topology: t,
-			pgs:      t.partitionGroups(),
-		},
+		taskManager:       tm,
 	}
 	sr.closed.Add(1)
 	return sr, nil

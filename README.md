@@ -12,6 +12,7 @@ prototype is being written. Goals are still under work and not yet fully clear.
 - Emphasis on parallelism: Strong async and bulk processing support. Be MUCH better at this that kafka streams, and compete with parallel-consumer.
 - Best developer experience. Be nice to use, but do not hide important details from the user
 - Processors for windowing, including calendar based windowing (https://github.com/confluentinc/kafka-streams-examples/blob/21d3079eb8de91619cc873148655cdf607135846/src/test/java/io/confluent/examples/streams/window/CustomWindowTest.java#L192)
+- Joins
 
 ## Non-Goals
 - Exactly-once-delivery
