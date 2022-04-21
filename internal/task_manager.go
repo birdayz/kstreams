@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/multierr"
@@ -99,8 +98,6 @@ func (t *TaskManager) Assigned(assigned map[string][]int32) error {
 				return errors.New("failed to create task")
 			}
 
-			fmt.Println("Created", pg.partitionGroup.sourceTopics, partition)
-
 			t.tasks = append(t.tasks, task)
 		}
 
@@ -122,7 +119,6 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 			// Find task
 			found := false
 			for i, task := range t.tasks {
-				fmt.Println("iter", task.topics, task.partition)
 				if slices.Equal(task.topics, pg.partitionGroup.sourceTopics) && task.partition == partition {
 					found = true
 					if err := task.Close(); err != nil {
@@ -132,8 +128,6 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 				}
 			}
 			if !found {
-				spew.Dump(revoked)
-				spew.Dump(matchingPGs)
 				return errors.New("could not find task to close/revoke")
 			}
 		}

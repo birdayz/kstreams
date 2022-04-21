@@ -3,12 +3,13 @@ package internal
 import (
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 type streamzBalancer struct {
+	log    *zerolog.Logger
 	topics []string
 	t      *TaskManager
 }
@@ -27,9 +28,6 @@ func (b *streamzBalancer) JoinGroupMetadata(
 	meta.Topics = interests // input interests are already sorted
 	return meta.AppendTo(nil)
 
-	// fmt.Println("join")
-	// // TODO
-	//
 	// meta := kmsg.NewConsumerMemberMetadata()
 	// meta.Version = 0
 	// meta.Topics = topicInterests
@@ -65,7 +63,6 @@ func (b *streamzBalancer) JoinGroupMetadata(
 // ParseSyncAssignment returns assigned topics and partitions from an
 // encoded SyncGroupResponse's MemberAssignment.
 func (b *streamzBalancer) ParseSyncAssignment(assignment []byte) (map[string][]int32, error) {
-	spew.Dump(assignment)
 	return kgo.ParseConsumerSyncAssignment(assignment)
 }
 
@@ -83,6 +80,23 @@ func (b *streamzBalancer) MemberBalancer(members []kmsg.JoinGroupResponseMember)
 	map[string]struct{},
 	error) {
 	balancer, err := kgo.NewConsumerBalancer(b, members)
+
+	allPGTopics := map[string]struct{}{}
+	for _, pg := range b.t.pgs {
+		for _, topic := range pg.sourceTopics {
+			allPGTopics[topic] = struct{}{}
+		}
+	}
+
+	for t := range allPGTopics {
+		if _, ok := balancer.MemberTopics()[t]; !ok {
+			b.log.Error().Str("topic_name", t).Msg("Topic missing")
+			return nil, nil, fmt.Errorf("topic missing: %s", t)
+		}
+	}
+
+	// Validate topics
+
 	return balancer, balancer.MemberTopics(), err
 }
 
@@ -102,9 +116,6 @@ func (b *streamzBalancer) Balance(x *kgo.ConsumerBalancer, i map[string]int32) k
 	if err != nil {
 		panic(err)
 	}
-
-	fmt.Println(len(x.Members()))
-	spew.Dump(pgp)
 
 	// Check co-partitioning
 

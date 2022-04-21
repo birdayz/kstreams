@@ -187,7 +187,6 @@ func (t *TopologyBuilder) NewTasks(assigned map[string][]int32) ([]*Task, error)
 		}
 
 		if topicMissing {
-			fmt.Println("Topic missing for pg, ignoring")
 			continue
 		}
 

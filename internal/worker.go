@@ -79,7 +79,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
 		// Add balancer
-		kgo.Balancers(&streamzBalancer{topics: topics, t: tm}),
+		kgo.Balancers(&streamzBalancer{log: &log, topics: topics, t: tm}),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {

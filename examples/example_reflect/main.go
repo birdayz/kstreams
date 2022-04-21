@@ -44,8 +44,10 @@ func main() {
 	}, "my-store")
 
 	streamz.RegisterSource(t, "my-topic", "my-topic", StringDeserializer, StringDeserializer)
+	streamz.RegisterSource(t, "my-second-topic", "my-second-topic", StringDeserializer, StringDeserializer)
 
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
+	streamz.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
 
 	str := streamz.New(t, streamz.WithNumRoutines(1))
 

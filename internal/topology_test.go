@@ -6,7 +6,6 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/streamz/sdk"
-	"github.com/davecgh/go-spew/spew"
 )
 
 func TestGroup(t *testing.T) {
@@ -49,7 +48,6 @@ func TestGroup(t *testing.T) {
 	assert.Equal(t, map[string][]string{"myprocessor": {"mystore"}, "secondprocessor": {"mystore"}, "myprocessor-2": nil}, top.processorToStores)
 
 	pgs := top.partitionGroups()
-	spew.Dump(pgs)
 
 	assert.Equal(t, []*PartitionGroup{{
 		sourceTopics:   []string{"mysource", "secondsource"},
