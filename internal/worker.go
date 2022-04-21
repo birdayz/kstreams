@@ -71,14 +71,12 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		pgs:      t.partitionGroups(),
 	}
 
-	// Close hangs if this channel is full/not read
 	par := make(chan AssignedOrRevoked)
 
 	topics := t.GetTopics()
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		// Add balancer
 		kgo.Balancers(&streamzBalancer{log: &log, topics: topics, t: tm}),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
@@ -214,81 +212,66 @@ func (r *Worker) handlePartitionsAssigned() {
 	}
 }
 
+func (r *Worker) handleCloseRequested() {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		// Wait until this is closed
+		for range r.assignedOrRevoked {
+			// TODO: OnRevoke: do commit here if needed
+		}
+		wg.Done()
+	}()
+
+	err := r.taskManager.Close()
+	if err != nil {
+		r.log.Error().Err(err).Msg("Failed to close tasks")
+	}
+
+	r.client.Close()
+	close(r.assignedOrRevoked) // Can close this only after client is closed, as the client writer to that channel
+	wg.Wait()
+	r.changeState(StateClosed)
+}
+
+func (r *Worker) handleCreated() {
+	select {
+	case assignments := <-r.assignedOrRevoked:
+		r.newlyAssigned = assignments.Assigned
+		r.newlyRevoked = assignments.Revoked
+		r.changeState(StatePartitionsAssigned)
+	case <-r.closeRequested:
+		r.changeState(StateCloseRequested)
+	}
+}
+
 // State transitions may only be done from within the loop
 func (r *Worker) Loop() {
 	for {
 		switch r.state {
-		case StateClosed:
-			r.handleClosed()
-
-			// Done, exit loop
-			return
-		case StateCloseRequested:
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-
-			go func() {
-				// Wait until this is closed
-				for range r.assignedOrRevoked {
-					// TODO: OnRevoke: do commit here if needed
-				}
-				wg.Done()
-			}()
-
-			err := r.taskManager.Close()
-			if err != nil {
-				r.log.Error().Err(err).Msg("Failed to close tasks")
-			}
-
-			r.client.Close()
-			close(r.assignedOrRevoked) // Can close this only after client is closed, as the client writer to that channel
-			wg.Wait()
-			r.changeState(StateClosed)
 		case StateCreated:
-			select {
-			case assignments := <-r.assignedOrRevoked:
-				r.newlyAssigned = assignments.Assigned
-				r.newlyRevoked = assignments.Revoked
-				r.changeState(StatePartitionsAssigned)
-				continue
-			case <-r.closeRequested:
-				r.changeState(StateCloseRequested)
-				continue
-			}
-
-		// In State PartitionsAssigned, tasks are set up. it transists to RUNNING
-		// once all tasks are ready
+			r.handleCreated()
+		case StateCloseRequested:
+			r.handleCloseRequested()
 		case StatePartitionsAssigned:
 			r.handlePartitionsAssigned()
 		case StateRunning:
 			r.handleRunning()
+		case StateClosed:
+			r.handleClosed()
+			return
 		}
-
 	}
 }
 
 func (r *Worker) Close() error {
-	r.log.Debug().Msg("Close")
-
-	r.log.Debug().Msg("cancel")
 	r.cancelPollMtx.Lock()
-
 	r.closeRequested <- struct{}{}
 	if r.cancelPoll != nil {
 		r.cancelPoll()
 	}
-
 	r.cancelPollMtx.Unlock()
-	r.log.Debug().Msg("cancelled")
-
 	r.closed.Wait()
-
-	r.log.Debug().Msg("Closed")
 	return nil
-}
-
-type TopicPartition struct {
-	Topic     string
-	Partition int32
 }
