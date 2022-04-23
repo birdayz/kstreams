@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"golang.org/x/exp/slices"
@@ -15,12 +14,10 @@ import (
 type PartitionGroupBalancer struct {
 	inner kgo.GroupBalancer
 	pgs   []*PartitionGroup
-
-	log *zerolog.Logger
 }
 
-func NewPartitionGroupBalancer(log *zerolog.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
-	return &PartitionGroupBalancer{log: log, inner: kgo.CooperativeStickyBalancer(), pgs: pgs}
+func NewPartitionGroupBalancer(pgs []*PartitionGroup) kgo.GroupBalancer {
+	return &PartitionGroupBalancer{inner: kgo.CooperativeStickyBalancer(), pgs: pgs}
 }
 
 func (w *PartitionGroupBalancer) ProtocolName() string {
@@ -46,7 +43,7 @@ func (w *PartitionGroupBalancer) MemberBalancer(members []kmsg.JoinGroupResponse
 
 	}
 	innerBalancer, topics, err := w.inner.MemberBalancer(members)
-	wrappedBalancer := &WrappingMemberBalancer{log: w.log, inner: innerBalancer, pgs: w.pgs, memberByName: mx}
+	wrappedBalancer := &WrappingMemberBalancer{inner: innerBalancer, pgs: w.pgs, memberByName: mx}
 	return wrappedBalancer, topics, err
 }
 
@@ -59,8 +56,6 @@ type WrappingMemberBalancer struct {
 	pgs   []*PartitionGroup
 
 	memberByName map[string]*kmsg.JoinGroupResponseMember
-
-	log *zerolog.Logger
 }
 
 func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncAssignment {

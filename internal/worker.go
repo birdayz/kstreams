@@ -77,7 +77,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		kgo.Balancers(NewPartitionGroupBalancer(&log, t.partitionGroups())),
+		kgo.Balancers(NewPartitionGroupBalancer(t.partitionGroups())),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
