@@ -1,144 +1,117 @@
 package internal
 
 import (
-	"fmt"
+	"reflect"
+	"unsafe"
 
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"golang.org/x/exp/slices"
 )
 
-type streamzBalancer struct {
-	log    *zerolog.Logger
-	topics []string
-	t      *TaskManager
+// PartitionGroupBalancer is a balancer that uses kgo's Cooperative-sticky balancer under the hood,
+// but enforces co-partitioning as defined by the given PartitionGroups.
+type PartitionGroupBalancer struct {
+	inner kgo.GroupBalancer
+	pgs   []*PartitionGroup
+
+	log *zerolog.Logger
 }
 
-func (b *streamzBalancer) ProtocolName() string {
-	return "streamz"
+func NewPartitionGroupBalancer(log *zerolog.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
+	return &PartitionGroupBalancer{log: log, inner: kgo.CooperativeStickyBalancer(), pgs: pgs}
 }
 
-func (b *streamzBalancer) JoinGroupMetadata(
-	interests []string,
+func (w *PartitionGroupBalancer) ProtocolName() string {
+	return "streamz-partitiongroup-cooperative-sticky"
+}
+
+func (w *PartitionGroupBalancer) JoinGroupMetadata(
+	topicInterests []string,
 	currentAssignment map[string][]int32,
 	generation int32,
 ) []byte {
-	meta := kmsg.NewConsumerMemberMetadata()
-	meta.Version = 0
-	meta.Topics = interests // input interests are already sorted
-	return meta.AppendTo(nil)
-
-	// meta := kmsg.NewConsumerMemberMetadata()
-	// meta.Version = 0
-	// meta.Topics = topicInterests
-	// spew.Dump(meta.Topics)
-	// // if s.cooperative {
-	// // 	meta.Version = 1
-	// // }
-	// // stickyMeta := kmsg.NewStickyMemberMetadata()
-	// // stickyMeta.Generation = generation
-	// // for topic, partitions := range currentAssignment {
-	// // 	if s.cooperative {
-	// // 		metaPart := kmsg.NewConsumerMemberMetadataOwnedPartition()
-	// // 		metaPart.Topic = topic
-	// // 		metaPart.Partitions = partitions
-	// // 		meta.OwnedPartitions = append(meta.OwnedPartitions, metaPart)
-	// // 	}
-	// // 	stickyAssn := kmsg.NewStickyMemberMetadataCurrentAssignment()
-	// // 	stickyAssn.Topic = topic
-	// // 	stickyAssn.Partitions = partitions
-	// // 	stickyMeta.CurrentAssignment = append(stickyMeta.CurrentAssignment, stickyAssn)
-	// // }
-	// //
-	// // // KAFKA-12898: ensure our topics are sorted
-	// // metaOwned := meta.OwnedPartitions
-	// // stickyCurrent := stickyMeta.CurrentAssignment
-	// // sort.Slice(metaOwned, func(i, j int) bool { return metaOwned[i].Topic < metaOwned[j].Topic })
-	// // sort.Slice(stickyCurrent, func(i, j int) bool { return stickyCurrent[i].Topic < stickyCurrent[j].Topic })
-	// //
-	// // meta.UserData = stickyMeta.AppendTo(nil)
-	// return meta.AppendTo(nil)
+	return w.inner.JoinGroupMetadata(topicInterests, currentAssignment, generation)
 }
 
-// ParseSyncAssignment returns assigned topics and partitions from an
-// encoded SyncGroupResponse's MemberAssignment.
-func (b *streamzBalancer) ParseSyncAssignment(assignment []byte) (map[string][]int32, error) {
-	return kgo.ParseConsumerSyncAssignment(assignment)
+func (w *PartitionGroupBalancer) ParseSyncAssignment(assignment []byte) (map[string][]int32, error) {
+	return w.inner.ParseSyncAssignment(assignment)
 }
 
-func (b *streamzBalancer) MemberTopics() map[string]struct{} {
-	res := map[string]struct{}{}
+func (w *PartitionGroupBalancer) MemberBalancer(members []kmsg.JoinGroupResponseMember) (b kgo.GroupMemberBalancer, topics map[string]struct{}, err error) {
+	mx := map[string]*kmsg.JoinGroupResponseMember{}
+	for i, member := range members {
+		mx[member.MemberID] = &members[i]
 
-	for _, topic := range b.topics {
-		res[topic] = struct{}{}
 	}
-	return res
+	innerBalancer, topics, err := w.inner.MemberBalancer(members)
+	wrappedBalancer := &WrappingMemberBalancer{log: w.log, inner: innerBalancer, pgs: w.pgs, memberByName: mx}
+	return wrappedBalancer, topics, err
 }
 
-func (b *streamzBalancer) MemberBalancer(members []kmsg.JoinGroupResponseMember) (
-	kgo.GroupMemberBalancer,
-	map[string]struct{},
-	error) {
-	balancer, err := kgo.NewConsumerBalancer(b, members)
+func (w *PartitionGroupBalancer) IsCooperative() bool {
+	return w.inner.IsCooperative()
+}
 
-	allPGTopics := map[string]struct{}{}
-	for _, pg := range b.t.pgs {
-		for _, topic := range pg.sourceTopics {
-			allPGTopics[topic] = struct{}{}
+type WrappingMemberBalancer struct {
+	inner kgo.GroupMemberBalancer
+	pgs   []*PartitionGroup
+
+	memberByName map[string]*kmsg.JoinGroupResponseMember
+
+	log *zerolog.Logger
+}
+
+func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncAssignment {
+	firstTopics := make([]string, 0, len(wb.pgs))
+	additionals := map[string][]string{} // firstTopics => rest
+
+	for _, pg := range wb.pgs {
+		slices.Sort(pg.sourceTopics)
+		firstTopics = append(firstTopics, pg.sourceTopics[0])
+		if len(pg.sourceTopics) > 1 {
+			additionals[pg.sourceTopics[0]] = pg.sourceTopics[1:]
 		}
 	}
 
-	for t := range allPGTopics {
-		if _, ok := balancer.MemberTopics()[t]; !ok {
-			b.log.Error().Str("topic_name", t).Msg("Topic missing")
-			return nil, nil, fmt.Errorf("topic missing: %s", t)
-		}
+	strippedMap := make(map[string]int32)
+
+	for _, topic := range firstTopics {
+		strippedMap[topic] = topics[topic]
 	}
 
-	// Validate topics
+	plan := wb.inner.Balance(strippedMap)
 
-	return balancer, balancer.MemberTopics(), err
-}
-
-func (b *streamzBalancer) Balance(x *kgo.ConsumerBalancer, i map[string]int32) kgo.IntoSyncAssignment {
-
-	tps := map[string][]int32{}
-
-	for topic, n := range i {
-		partitions := make([]int32, 0, n)
-		for d := 0; d < int(n); d++ {
-			partitions = append(partitions, int32(d))
-		}
-		tps[topic] = partitions
+	balancePlan, ok := plan.(*kgo.BalancePlan)
+	if !ok {
+		panic("invalid balance plan type, this should not happen and indicates an incompatibility with franz-go")
 	}
 
-	pgp, err := b.t.matchingPGs(tps)
-	if err != nil {
-		panic(err)
-	}
+	planMap := wb.getPlanMap(balancePlan)
 
-	// Check co-partitioning
-
-	// p := &kgo.BalancePlan{}
-	p := x.NewPlan()
-	for _, pg := range pgp {
-
-		partitionCount := i[pg.sourceTopics[0]]
-
-		for f := 0; f < int(partitionCount); f++ {
-
-			// Assign all topics to someone
-			for _, topic := range pg.sourceTopics {
-				p.AddPartition(&x.Members()[f%len(x.Members())], topic, int32(f))
+	for member, memberMap := range planMap {
+		for topic, partitions := range memberMap {
+			if moreTopics, ok := additionals[topic]; ok {
+				for _, otherTopic := range moreTopics {
+					balancePlan.AddPartitions(wb.memberByName[member], otherTopic, partitions)
+				}
 			}
+
 		}
 
 	}
-
-	return p
+	return plan
 }
 
-// IsCooperative returns if this is a cooperative balance strategy.
-func (b *streamzBalancer) IsCooperative() bool {
-	return false
+func (wb *WrappingMemberBalancer) getPlanMap(i *kgo.BalancePlan) map[string]map[string][]int32 {
+	planField := reflect.ValueOf(i).Elem().FieldByName("plan")
+	planField = reflect.NewAt(planField.Type(), unsafe.Pointer(planField.UnsafeAddr())).Elem()
+	planMap, ok := planField.Interface().(map[string]map[string][]int32)
+	if !ok {
+		panic("could not cast to balance plan map, this should not happen and indicates an incompatibility with franz-go")
+	}
+
+	return planMap
+
 }

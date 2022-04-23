@@ -60,6 +60,10 @@ func (t *TaskManager) findPGs(assignedOrRevoked map[string][]int32) ([]*pgPartit
 		return nil, err
 	}
 
+	for _, v := range assignedOrRevoked {
+		slices.Sort(v)
+	}
+
 	var res []*pgPartitions
 	for _, pg := range matchingPGs {
 		var partitions []int32
