@@ -27,6 +27,7 @@ require (
 	github.com/twmb/franz-go v1.4.2 // indirect
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.0.0 // indirect
+	github.com/twmb/franz-go/plugin/kzerolog v1.0.0 // indirect
 	github.com/twmb/go-rbtree v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect

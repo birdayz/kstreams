@@ -18,6 +18,7 @@ require (
 	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect
 	github.com/stretchr/testify v1.7.1 // indirect
+	github.com/twmb/franz-go/plugin/kzerolog v1.0.0 // indirect
 	github.com/twmb/go-rbtree v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd // indirect

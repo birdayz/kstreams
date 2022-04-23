@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/plugin/kzerolog"
 )
 
 type RoutineState string
@@ -86,6 +87,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		kgo.OnPartitionsRevoked(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Revoked: m}
 		}),
+		kgo.WithLogger(kzerolog.New(&log)),
 	)
 	if err != nil {
 		return nil, err
