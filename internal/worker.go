@@ -63,7 +63,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
-	log := zerolog.New(output).With().Timestamp().Logger().With().Str("component", name).Logger()
+	log := zerolog.New(output).With().Timestamp().Logger().Level(zerolog.InfoLevel).With().Str("component", name).Logger()
 
 	tm := &TaskManager{
 		tasks:    []*Task{},

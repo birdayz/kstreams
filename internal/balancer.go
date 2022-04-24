@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"fmt"
 	"reflect"
 	"unsafe"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"golang.org/x/exp/slices"
@@ -43,6 +45,16 @@ func (w *PartitionGroupBalancer) MemberBalancer(members []kmsg.JoinGroupResponse
 
 	}
 	innerBalancer, topics, err := w.inner.MemberBalancer(members)
+
+	// Check topics
+	for _, pg := range w.pgs {
+		for _, requiredTopic := range pg.sourceTopics {
+			if _, ok := topics[requiredTopic]; !ok {
+				return nil, nil, fmt.Errorf("partition group requires topic %s, but it's missing", requiredTopic)
+			}
+		}
+	}
+
 	wrappedBalancer := &WrappingMemberBalancer{inner: innerBalancer, pgs: w.pgs, memberByName: mx}
 	return wrappedBalancer, topics, err
 }
@@ -76,6 +88,8 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 		strippedMap[topic] = topics[topic]
 	}
 
+	spew.Dump(strippedMap)
+
 	plan := wb.inner.Balance(strippedMap)
 
 	balancePlan, ok := plan.(*kgo.BalancePlan)
@@ -96,6 +110,7 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 		}
 
 	}
+
 	return plan
 }
 

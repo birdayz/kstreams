@@ -37,7 +37,7 @@ func main() {
 			panic(err)
 		}
 
-		typed := sdk.NewTypedStateStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
+		typed := streamz.NewKeyValueStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
 
 		return typed
 
@@ -131,7 +131,7 @@ func (s *StoreBuilderImpl) Build(p int32) sdk.Store {
 		panic(err)
 	}
 
-	typed := sdk.NewTypedStateStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
+	typed := streamz.NewKeyValueStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
 
 	return typed
 }

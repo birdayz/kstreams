@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/birdayz/streamz"
 	"github.com/birdayz/streamz/sdk"
 	"github.com/cockroachdb/pebble"
 )
@@ -35,7 +36,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	v, closer, err := s.db.Get(k)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, sdk.ErrNotFound
+			return nil, streamz.ErrKeyNotFound
 		}
 		return nil, err
 	}
@@ -47,7 +48,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	return res, nil
 }
 
-func NewPersistent(stateDir, name string, partition uint32) (sdk.KeyValueByteStore, error) {
+func NewPersistent(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
 	if stateDir == "" {
 		stateDir = "/tmp/streamz"
 	}
@@ -60,4 +61,4 @@ func NewPersistent(stateDir, name string, partition uint32) (sdk.KeyValueByteSto
 	return &pebbleStore{db: db}, nil
 }
 
-var _ = sdk.KeyValueByteStore(&pebbleStore{})
+var _ = sdk.StoreBackend(&pebbleStore{})
