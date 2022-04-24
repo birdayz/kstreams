@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"golang.org/x/exp/slices"
@@ -16,10 +16,12 @@ import (
 type PartitionGroupBalancer struct {
 	inner kgo.GroupBalancer
 	pgs   []*PartitionGroup
+
+	log *zerolog.Logger
 }
 
-func NewPartitionGroupBalancer(pgs []*PartitionGroup) kgo.GroupBalancer {
-	return &PartitionGroupBalancer{inner: kgo.CooperativeStickyBalancer(), pgs: pgs}
+func NewPartitionGroupBalancer(log *zerolog.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
+	return &PartitionGroupBalancer{inner: kgo.CooperativeStickyBalancer(), pgs: pgs, log: log}
 }
 
 func (w *PartitionGroupBalancer) ProtocolName() string {
@@ -39,6 +41,7 @@ func (w *PartitionGroupBalancer) ParseSyncAssignment(assignment []byte) (map[str
 }
 
 func (w *PartitionGroupBalancer) MemberBalancer(members []kmsg.JoinGroupResponseMember) (b kgo.GroupMemberBalancer, topics map[string]struct{}, err error) {
+
 	mx := map[string]*kmsg.JoinGroupResponseMember{}
 	for i, member := range members {
 		mx[member.MemberID] = &members[i]
@@ -55,7 +58,7 @@ func (w *PartitionGroupBalancer) MemberBalancer(members []kmsg.JoinGroupResponse
 		}
 	}
 
-	wrappedBalancer := &WrappingMemberBalancer{inner: innerBalancer, pgs: w.pgs, memberByName: mx}
+	wrappedBalancer := &WrappingMemberBalancer{inner: innerBalancer, pgs: w.pgs, memberByName: mx, log: w.log}
 	return wrappedBalancer, topics, err
 }
 
@@ -68,6 +71,8 @@ type WrappingMemberBalancer struct {
 	pgs   []*PartitionGroup
 
 	memberByName map[string]*kmsg.JoinGroupResponseMember
+
+	log *zerolog.Logger
 }
 
 func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncAssignment {
@@ -88,7 +93,27 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 		strippedMap[topic] = topics[topic]
 	}
 
-	spew.Dump(strippedMap)
+	// Check for co-partitioning. cant return error GG
+	for _, firstTopic := range firstTopics {
+		numFirstPartitions := topics[firstTopic]
+
+		var imbalance bool
+		safePartitions := topics[firstTopic]
+		for _, additional := range additionals[firstTopic] {
+			if topics[additional] != numFirstPartitions {
+				imbalance = true
+				if topics[additional] < safePartitions {
+					safePartitions = topics[additional]
+				}
+			}
+		}
+		if imbalance {
+			topics[firstTopic] = safePartitions
+			pgTopics := []string{firstTopic}
+			pgTopics = append(pgTopics, additionals[firstTopic]...)
+			wb.log.Error().Strs("partitionGroupTopics", pgTopics).Int("usedPartitions", int(safePartitions)).Msg("PartitionGroup not co-partitioned. Ignoring excess partitions")
+		}
+	}
 
 	plan := wb.inner.Balance(strippedMap)
 
