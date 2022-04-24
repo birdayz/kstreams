@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rs/zerolog"
+	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/multierr"
 	"golang.org/x/exp/slices"
@@ -14,7 +14,7 @@ type TaskManager struct {
 	tasks []*Task
 
 	client *kgo.Client
-	log    *zerolog.Logger
+	log    logr.Logger
 
 	topology *TopologyBuilder
 
@@ -144,7 +144,7 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 func (t *TaskManager) Commit() error {
 	var err error
 	for _, task := range t.tasks {
-		err = multierr.Append(task.Commit(t.client, t.log), err)
+		err = multierr.Append(task.Commit(t.client), err)
 	}
 	return err
 }

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/rs/zerolog"
+	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"golang.org/x/exp/slices"
@@ -17,10 +17,10 @@ type PartitionGroupBalancer struct {
 	inner kgo.GroupBalancer
 	pgs   []*PartitionGroup
 
-	log *zerolog.Logger
+	log logr.Logger
 }
 
-func NewPartitionGroupBalancer(log *zerolog.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
+func NewPartitionGroupBalancer(log logr.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
 	return &PartitionGroupBalancer{inner: kgo.CooperativeStickyBalancer(), pgs: pgs, log: log}
 }
 
@@ -72,7 +72,7 @@ type WrappingMemberBalancer struct {
 
 	memberByName map[string]*kmsg.JoinGroupResponseMember
 
-	log *zerolog.Logger
+	log logr.Logger
 }
 
 func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncAssignment {
@@ -111,7 +111,7 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 			topics[firstTopic] = safePartitions
 			pgTopics := []string{firstTopic}
 			pgTopics = append(pgTopics, additionals[firstTopic]...)
-			wb.log.Error().Strs("partitionGroupTopics", pgTopics).Int("usedPartitions", int(safePartitions)).Msg("PartitionGroup not co-partitioned. Ignoring excess partitions")
+			wb.log.Error(nil, "PartitionGroup not co-partitioned. Ignoring excess partitions", "partitionGroupTopics", pgTopics, "usedPartitions", safePartitions)
 		}
 	}
 

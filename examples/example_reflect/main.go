@@ -11,6 +11,7 @@ import (
 	"github.com/birdayz/streamz"
 	"github.com/birdayz/streamz/sdk"
 	"github.com/birdayz/streamz/stores"
+	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 
 	"net/http"
@@ -23,6 +24,8 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerologr.NameFieldName = "logger"
+	zerologr.NameSeparator = "/"
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
 	log := zerolog.New(output).Level(zerolog.InfoLevel).With().Timestamp().Logger()
 
@@ -49,7 +52,7 @@ func main() {
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
 
-	str := streamz.New(t, streamz.WithNumRoutines(1))
+	str := streamz.New(t, streamz.WithNumRoutines(1), streamz.WithLogr(zerologr.New(&log)))
 
 	log.Info().Msg("Start streamz")
 	str.Start()

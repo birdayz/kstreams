@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/birdayz/streamz/sdk"
-	"github.com/rs/zerolog"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -68,7 +67,7 @@ func (t *Task) Close() error {
 	return err
 }
 
-func (t *Task) Commit(client *kgo.Client, log *zerolog.Logger) error {
+func (t *Task) Commit(client *kgo.Client) error {
 	if t.needCommit {
 		errCh := make(chan error, 1)
 

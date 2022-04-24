@@ -2,15 +2,13 @@ package internal
 
 import (
 	"context"
-	"os"
 	"runtime/pprof"
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog"
+	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/plugin/kzerolog"
 )
 
 type RoutineState string
@@ -27,7 +25,7 @@ const (
 type Worker struct {
 	client      *kgo.Client
 	adminClient *kadm.Client
-	log         *zerolog.Logger
+	log         logr.Logger
 	group       string
 
 	t *TopologyBuilder
@@ -59,15 +57,12 @@ type AssignedOrRevoked struct {
 }
 
 // Config
-func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) (*Worker, error) {
+func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, brokers []string) (*Worker, error) {
 	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
-	zerolog.TimeFieldFormat = time.RFC3339Nano
-	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
-	log := zerolog.New(output).With().Timestamp().Logger().Level(zerolog.InfoLevel).With().Str("component", name).Logger()
 
 	tm := &TaskManager{
 		tasks:    []*Task{},
-		log:      &log,
+		log:      log,
 		topology: t,
 		pgs:      t.partitionGroups(),
 	}
@@ -78,7 +73,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		kgo.Balancers(NewPartitionGroupBalancer(&log, t.partitionGroups())),
+		kgo.Balancers(NewPartitionGroupBalancer(log, t.partitionGroups())),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
@@ -87,7 +82,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 		kgo.OnPartitionsRevoked(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Revoked: m}
 		}),
-		kgo.WithLogger(kzerolog.New(&log)),
+		// kgo.WithLogger(kzerolog.New(&log)),
 	)
 	if err != nil {
 		return nil, err
@@ -97,7 +92,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 
 	sr := &Worker{
 		name:              name,
-		log:               &log,
+		log:               log,
 		group:             group,
 		client:            client,
 		adminClient:       kadm.NewClient(client),
@@ -113,7 +108,7 @@ func NewWorker(name string, t *TopologyBuilder, group string, brokers []string) 
 }
 
 func (r *Worker) changeState(newState RoutineState) {
-	r.log.Info().Str("from", string(r.state)).Str("to", string(newState)).Msg("Change state")
+	r.log.Info("Change state", "from", r.state, "to", newState)
 	r.state = newState
 }
 
@@ -153,13 +148,11 @@ func (r *Worker) handleRunning() {
 
 	r.cancelPollMtx.Unlock()
 
-	r.log.Debug().Msg("Polling Records")
+	r.log.V(2).Info("Polling Records")
 	f := r.client.PollRecords(ctx, r.maxPollRecords)
-	// defer r.client.AllowRebalance()
-	r.log.Debug().Msg("Polled Records")
+	r.log.V(2).Info("Polled Records")
 
 	if f.IsClientClosed() {
-		r.log.Debug().Msg("Err client Closed")
 		r.changeState(StateCloseRequested)
 		return
 	}
@@ -167,23 +160,23 @@ func (r *Worker) handleRunning() {
 	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
 		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 		if err != nil {
-			r.log.Error().Err(err).Msg("failed to get task")
+			r.log.Error(err, "failed to get task")
 			return
 		}
 
-		r.log.Debug().Str("topic", fetch.Topic).Int32("partition", fetch.Partition).Msg("Processing")
+		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 		count := 0
 		fetch.EachRecord(func(record *kgo.Record) {
 			count++
 			if err := task.Process(record); err != nil {
-				r.log.Error().Err(err).Msg("Failed to process record")
+				r.log.Error(err, "Failed to process record") // TODO - handle.
 				r.changeState(StateCloseRequested)
 				return
 			}
 		})
-		r.log.Debug().Str("topic", fetch.Topic).Int32("partition", fetch.Partition).Int("count", count).Msg("Processed")
+		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 
-		if err := task.Commit(r.client, r.log); err != nil {
+		if err := task.Commit(r.client); err != nil {
 			r.changeState(StateCloseRequested)
 			return
 		}
@@ -197,11 +190,11 @@ func (r *Worker) handleClosed() {
 
 func (r *Worker) handlePartitionsAssigned() {
 	if err := r.taskManager.Revoked(r.newlyRevoked); err != nil {
-		r.log.Error().Err(err).Msg("revoked failed")
+		r.log.Error(err, "revoked failed")
 	}
 
 	if err := r.taskManager.Assigned(r.newlyAssigned); err != nil {
-		r.log.Error().Err(err).Msg("assigned failed")
+		r.log.Error(err, "assigned failed")
 	}
 
 	r.newlyAssigned = nil
@@ -228,7 +221,7 @@ func (r *Worker) handleCloseRequested() {
 
 	err := r.taskManager.Close()
 	if err != nil {
-		r.log.Error().Err(err).Msg("Failed to close tasks")
+		r.log.Error(err, "Failed to close tasks")
 	}
 
 	r.client.Close()

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/birdayz/streamz/internal"
+	"github.com/go-logr/logr"
 )
 
 type Option func(*Streamz)
@@ -16,11 +17,19 @@ type Streamz struct {
 	t           *internal.TopologyBuilder // change to topology
 
 	routines []*internal.Worker
+
+	log logr.Logger
 }
 
 var WithNumRoutines = func(n int) Option {
 	return func(s *Streamz) {
 		s.numRoutines = n
+	}
+}
+
+var WithLogr = func(log logr.Logger) Option {
+	return func(s *Streamz) {
+		s.log = log
 	}
 }
 
@@ -31,6 +40,7 @@ func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
 		groupName:   "streamz-app",
 		t:           t,
 		routines:    []*internal.Worker{},
+		log:         logr.Discard(),
 	}
 
 	for _, opt := range opts {
@@ -42,7 +52,7 @@ func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
 
 func (c *Streamz) Start() error {
 	for i := 0; i < c.numRoutines; i++ {
-		routine, err := internal.NewWorker(fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
+		routine, err := internal.NewWorker(c.log.WithName("worker"), fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
 		if err != nil {
 			return err
 		}
