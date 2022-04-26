@@ -15,6 +15,7 @@ type TopologyBuilder struct {
 
 	// Key = TopicNode
 	sources map[string]*TopologyProcessor
+	sinks   map[string]*TopologyProcessor
 
 	processorToParent map[string]string
 
@@ -216,8 +217,6 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, e
 		srcs = append(srcs, src)
 	}
 
-	// FIXME TODO state stores are not per topic, we maybe have to deal with it differently so they can be shared across topics
-
 	var stores []sdk.Store
 	for _, store := range t.stores {
 		stores = append(stores, store(partition))
@@ -241,16 +240,16 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, e
 	}
 
 	for k, builtProcessor := range builtProcessors {
-		parentNode := t.processors[k]
+		node := t.processors[k]
 
-		for _, childNodeName := range parentNode.ChildProcessors {
+		for _, childNodeName := range node.ChildProcessors {
 			childNode := t.processors[childNodeName]
 
 			child, ok := builtProcessors[childNode.Name]
 			if !ok {
 				return nil, fmt.Errorf("processor %s not found", childNode.Name)
 			}
-			parentNode.AddChildFunc(builtProcessor, child)
+			node.AddChildFunc(builtProcessor, child)
 		}
 	}
 
@@ -342,6 +341,36 @@ func must(err error) {
 	}
 }
 
+func MustAddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) {
+	must(AddSink(t, name, topic, keySerializer, valueSerializer))
+}
+
+func AddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) error {
+	sinkNode := SinkNode[K, V]{
+		KeySerializer:   keySerializer,
+		ValueSerializer: valueSerializer,
+		client:          nil,
+		topic:           topic,
+	}
+
+	topoProcessor := &TopologyProcessor{
+		Name: name,
+		Builder: func() sdk.BaseProcessor {
+			return &sinkNode
+		},
+		ChildProcessors: []string{},
+	}
+
+	if _, found := t.processors[name]; found {
+		return ErrNodeAlreadyExists
+	}
+
+	t.processors[name] = topoProcessor
+	t.sinks[name] = topoProcessor
+
+	return nil
+}
+
 func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) {
 	must(AddProcessor(t, p, name, stores...))
 }
@@ -374,6 +403,7 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 			panic("type error")
 		}
 
+		// TODO !!! use child name
 		parentNode.outputs["childa"] = childNode
 		parentNode.ctx.outputs["childa"] = childNode
 	}

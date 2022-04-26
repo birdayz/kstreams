@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/birdayz/streamz/sdk"
@@ -26,10 +27,20 @@ func (s *SinkNode[K, V]) Process(k K, v V) error {
 		return fmt.Errorf("sinkNode: failed to marshal value: %w", err)
 	}
 
-	// TODO
+	s.client.Produce(context.Background(), &kgo.Record{
+		Key:   key,
+		Value: value,
+		Topic: s.topic,
+	}, nil)
 
-	_ = key
-	_ = value
+	return nil
+}
 
+func (s *SinkNode[K, V]) Close() error {
+	return nil
+}
+
+// TODO do not use these
+func (s *SinkNode[K, V]) Init(stores ...sdk.Store) error {
 	return nil
 }
