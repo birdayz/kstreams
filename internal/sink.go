@@ -16,6 +16,15 @@ type SinkNode[K any, V any] struct {
 	topic  string
 }
 
+func NewSinkNode[K, V any](client *kgo.Client, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) *SinkNode[K, V] {
+	return &SinkNode[K, V]{
+		client:          client,
+		topic:           topic,
+		KeySerializer:   keySerializer,
+		ValueSerializer: valueSerializer,
+	}
+}
+
 func (s *SinkNode[K, V]) Process(k K, v V) error {
 	key, err := s.KeySerializer(k)
 	if err != nil {
@@ -33,14 +42,5 @@ func (s *SinkNode[K, V]) Process(k K, v V) error {
 		Topic: s.topic,
 	}, nil)
 
-	return nil
-}
-
-func (s *SinkNode[K, V]) Close() error {
-	return nil
-}
-
-// TODO do not use these
-func (s *SinkNode[K, V]) Init(stores ...sdk.Store) error {
 	return nil
 }

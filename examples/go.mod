@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/birdayz/streamz v0.0.0-20220410233832-8efff200c41e
 	github.com/birdayz/streamz/stores v0.0.0-20220410233832-8efff200c41e
+	github.com/go-logr/zerologr v1.2.1
 	github.com/rs/zerolog v1.26.1
 )
 
@@ -16,9 +17,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20220408205130-c55c1d80c374 // indirect
 	github.com/cockroachdb/redact v1.0.8 // indirect
 	github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
-	github.com/go-logr/zerologr v1.2.1 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/klauspost/compress v1.15.1 // indirect
@@ -29,7 +28,6 @@ require (
 	github.com/twmb/franz-go v1.4.2 // indirect
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.0.0 // indirect
-	github.com/twmb/franz-go/plugin/kzerolog v1.0.0 // indirect
 	github.com/twmb/go-rbtree v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect

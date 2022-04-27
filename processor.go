@@ -15,8 +15,9 @@ func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, key
 	internal.MustAddSource(t, name, topic, keyDeserializer, valueDeserializer)
 }
 
-func RegisterSink[K, V any](t *TopologyBuilder, name string, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) {
+func RegisterSink[K, V any](t *TopologyBuilder, name string, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V], parent string) {
 	internal.MustAddSink(t, name, topic, keySerializer, valueSerializer)
+	internal.MustSetParent(t, parent, name)
 }
 
 func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorBuilder[Kin, Vin, Kout, Vout], name, parent string, stores ...string) {

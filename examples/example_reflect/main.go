@@ -52,6 +52,8 @@ func main() {
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
 
+	streamz.RegisterSink(t, "my-sink-topic", "my-sink-topic", StringSerializer, StringSerializer, "processor-2")
+
 	str := streamz.New(t, streamz.WithNumRoutines(1), streamz.WithLogr(zerologr.New(&log)))
 
 	log.Info().Msg("Start streamz")
@@ -94,14 +96,13 @@ func (p *MyProcessor) Close() error {
 }
 
 func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
-	// v2 := v + "-modified"
 	old, err := p.store.Get(k)
 	if err == nil {
 		fmt.Println("Found old value!", k, old)
 	}
 	p.store.Set(k, v)
 	fmt.Println("New value", k, v)
-	// ctx.Forward(k, v2)
+	ctx.Forward(k, v)
 	return nil
 }
 

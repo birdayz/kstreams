@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/birdayz/streamz/sdk"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"golang.org/x/exp/slices"
 )
 
@@ -15,7 +16,7 @@ type TopologyBuilder struct {
 
 	// Key = TopicNode
 	sources map[string]*TopologyProcessor
-	sinks   map[string]*TopologyProcessor
+	sinks   map[string]*TopologySink
 
 	processorToParent map[string]string
 
@@ -139,6 +140,10 @@ func (t *TopologyBuilder) findAllProcessors(processor string) []string {
 	var res []string
 	if children, ok := t.childNodes[processor]; ok {
 		for _, child := range children {
+			// Ignore sinks
+			if _, ok := t.sinks[child]; ok {
+				continue
+			}
 			res = append(res, child)
 			res = append(res, t.findAllProcessors(child)...)
 		}
@@ -154,59 +159,9 @@ func (t *TopologyBuilder) GetTopics() []string {
 	return res
 }
 
-// NewTasks returns fresh tasks for given topic partitions. It honors
-// the topology and partition groups derived from it.
-func (t *TopologyBuilder) NewTasks(assigned map[string][]int32) ([]*Task, error) {
-	var tasks []*Task
-	pgs := t.partitionGroups()
-
-	// todo - ensure co-partitioning
-
-	// validate we know these topics
-	for topic := range assigned {
-		var found bool
-
-		for _, pg := range pgs {
-			if slices.Contains(pg.sourceTopics, topic) {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return nil, fmt.Errorf("could not find partition group for assigned topic %s", topic)
-		}
-	}
-
-	for _, pg := range pgs {
-		var topicMissing bool
-		for _, topic := range pg.sourceTopics {
-			_, found := assigned[topic]
-			if !found {
-				break
-			}
-		}
-
-		if topicMissing {
-			continue
-		}
-
-		// FIXME ensure same p's assigned within co-partition group.
-		for _, partition := range assigned[pg.sourceTopics[0]] {
-			task, err := t.CreateTask(pg.sourceTopics, partition)
-			if err != nil {
-				panic(err)
-			}
-			tasks = append(tasks, task)
-		}
-
-	}
-
-	return tasks, nil
-}
-
-// know how they are co partitioned
-func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, error) {
+// CreateTask returns a Task for the given topics. It contains all topics, and
+// their child processors & sinks. sdfhjsdfj asdfjl dsjlfk
+func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *kgo.Client) (*Task, error) {
 	var srcs []*TopologyProcessor
 
 	for _, topic := range topics {
@@ -230,26 +185,53 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, e
 	}
 	neededProcessors = slices.Compact(neededProcessors)
 
+	builtSinks := map[string]any{}
+
 	for _, pr := range neededProcessors {
-		topoProcessor := t.processors[pr]
+		topoProcessor, ok := t.processors[pr]
+		if ok {
+			built := topoProcessor.Builder()
 
-		built := topoProcessor.Builder()
+			built.Init(stores...) // TODO move init into task. Topo only creates, task inits closes
+			builtProcessors[topoProcessor.Name] = built
+		} else {
+			topoSink, ok := t.sinks[pr]
+			if !ok {
+				return nil, fmt.Errorf("could not find node: %s", pr)
+			}
 
-		built.Init(stores...) // TODO move init into task. Topo only creates, task inits closes
-		builtProcessors[topoProcessor.Name] = built
+			sink := topoSink.Builder(client)
+			builtSinks[topoSink.Name] = sink
+		}
+
 	}
 
 	for k, builtProcessor := range builtProcessors {
 		node := t.processors[k]
 
-		for _, childNodeName := range node.ChildProcessors {
-			childNode := t.processors[childNodeName]
+		for _, childNodeName := range node.ChildNodes {
+			childNode, ok := t.processors[childNodeName]
+			if ok {
 
-			child, ok := builtProcessors[childNode.Name]
-			if !ok {
-				return nil, fmt.Errorf("processor %s not found", childNode.Name)
+				child, ok := builtProcessors[childNode.Name]
+				if !ok {
+					return nil, fmt.Errorf("processor %s not found", childNode.Name)
+				}
+				node.AddChildFunc(builtProcessor, child, childNode.Name)
+			} else {
+				childSink, ok := t.sinks[childNodeName]
+				if !ok {
+					return nil, fmt.Errorf("could not find child node %s", childNodeName)
+				}
+
+				child, ok := builtSinks[childSink.Name]
+				if !ok {
+					return nil, fmt.Errorf("could not find child node %s", childNodeName)
+				}
+
+				node.AddChildFunc(builtProcessor, child, childSink.Name)
+
 			}
-			node.AddChildFunc(builtProcessor, child)
 		}
 	}
 
@@ -266,10 +248,20 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32) (*Task, e
 func appendChildren(t *TopologyBuilder, p *TopologyProcessor) []string {
 	var res []string
 	res = append(res, p.Name)
-	for _, child := range p.ChildProcessors {
-		childProcessor := t.processors[child]
+	for _, child := range p.ChildNodes {
+		childProcessor, ok := t.processors[child]
+		if ok {
+			res = append(res, appendChildren(t, childProcessor)...)
+		} else {
+			_, ok := t.sinks[child]
+			if !ok {
+				// TODO handle. Neither processor, not sink found.
+			}
 
-		res = append(res, appendChildren(t, childProcessor)...)
+			// It's a sink. Since this is terminal, we don't need to go further and
+			// can just add the name
+			res = append(res, child)
+		}
 
 	}
 	return res
@@ -283,7 +275,13 @@ func NewTopologyBuilder() *TopologyBuilder {
 		processorToParent: map[string]string{},
 		processorToStores: map[string][]string{},
 		childNodes:        map[string][]string{},
+		sinks:             map[string]*TopologySink{},
 	}
+}
+
+type TopologySink struct {
+	Name    string
+	Builder func(*kgo.Client) any
 }
 
 type TopologyProcessor struct {
@@ -291,9 +289,9 @@ type TopologyProcessor struct {
 	Builder func() sdk.BaseProcessor // Process0r -> "User processor"
 	Type    reflect.Type
 
-	ChildProcessors []string
+	ChildNodes []string
 
-	AddChildFunc func(parent any, child any) // Builds ProcessorNode. Call Next() for each in ChildProcessors
+	AddChildFunc func(parent any, child any, childName string) // Builds ProcessorNode. Call Next() for each in ChildProcessors
 }
 
 func MustAddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) {
@@ -307,7 +305,7 @@ func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeser
 		Builder: func() sdk.BaseProcessor {
 			return &SourceNode[K, V]{KeyDeserializer: keyDeserializer, ValueDeserializer: valueDeserializer}
 		},
-		AddChildFunc: func(parent, child any) {
+		AddChildFunc: func(parent, child any, childName string) {
 			parentNode, ok := parent.(*SourceNode[K, V])
 			if !ok {
 				panic("type error")
@@ -322,7 +320,7 @@ func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeser
 			parentNode.AddNext(childNode)
 
 		},
-		ChildProcessors: []string{},
+		ChildNodes: []string{},
 	}
 
 	if _, found := t.processors[name]; found {
@@ -346,27 +344,15 @@ func MustAddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer
 }
 
 func AddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) error {
-	sinkNode := SinkNode[K, V]{
-		KeySerializer:   keySerializer,
-		ValueSerializer: valueSerializer,
-		client:          nil,
-		topic:           topic,
-	}
-
-	topoProcessor := &TopologyProcessor{
+	topoSink := &TopologySink{
 		Name: name,
-		Builder: func() sdk.BaseProcessor {
-			return &sinkNode
+		Builder: func(client *kgo.Client) any {
+			return NewSinkNode(client, topic, keySerializer, valueSerializer)
 		},
-		ChildProcessors: []string{},
 	}
 
-	if _, found := t.processors[name]; found {
-		return ErrNodeAlreadyExists
-	}
-
-	t.processors[name] = topoProcessor
-	t.sinks[name] = topoProcessor
+	// t.processors[name] = topoProcessor
+	t.sinks[name] = topoSink
 
 	return nil
 }
@@ -380,8 +366,8 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 		Name: name,
 		Builder: func() sdk.BaseProcessor {
 			px := &Process0rNode[Kin, Vin, Kout, Vout]{
-				processor: p(),
-				outputs:   map[string]GenericProcessor[Kout, Vout]{},
+				userProcessor: p(),
+				outputs:       map[string]GenericProcessor[Kout, Vout]{},
 				ctx: &ProcessorContext[Kout, Vout]{
 					outputs:      map[string]GenericProcessor[Kout, Vout]{},
 					outputErrors: map[string]error{},
@@ -389,10 +375,10 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 			}
 			return px
 		},
-		ChildProcessors: []string{},
+		ChildNodes: []string{},
 	}
 
-	topoProcessor.AddChildFunc = func(parent any, child any) {
+	topoProcessor.AddChildFunc = func(parent any, child any, childName string) {
 		parentNode, ok := parent.(*Process0rNode[Kin, Vin, Kout, Vout])
 		if !ok {
 			panic("type error")
@@ -403,9 +389,8 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 			panic("type error")
 		}
 
-		// TODO !!! use child name
-		parentNode.outputs["childa"] = childNode
-		parentNode.ctx.outputs["childa"] = childNode
+		parentNode.outputs[childName] = childNode
+		parentNode.ctx.outputs[childName] = childNode
 	}
 
 	if _, found := t.processors[name]; found {
@@ -435,7 +420,9 @@ func SetParent(t *TopologyBuilder, parent, child string) error {
 		return ErrNodeNotFound
 	}
 
-	parentNode.ChildProcessors = append(parentNode.ChildProcessors, child)
+	// TODO validate child exists.
+
+	parentNode.ChildNodes = append(parentNode.ChildNodes, child)
 
 	t.processorToParent[child] = parent
 
@@ -448,13 +435,6 @@ func SetParent(t *TopologyBuilder, parent, child string) error {
 
 	return nil
 
-}
-
-type Topology struct {
-}
-
-func Build() *Topology {
-	return &Topology{}
 }
 
 var ErrNodeAlreadyExists = errors.New("node exists already")

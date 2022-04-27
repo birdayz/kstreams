@@ -7,14 +7,14 @@ type Nexter[K, V any] interface {
 }
 
 type Process0rNode[Kin any, Vin any, Kout any, Vout any] struct {
-	processor sdk.Processor[Kin, Vin, Kout, Vout]
-	outputs   map[string]GenericProcessor[Kout, Vout]
+	userProcessor sdk.Processor[Kin, Vin, Kout, Vout]
+	outputs       map[string]GenericProcessor[Kout, Vout]
 
 	ctx *ProcessorContext[Kout, Vout]
 }
 
 func (p *Process0rNode[Kin, Vin, Kout, Vout]) Process(k Kin, v Vin) error {
-	err := p.processor.Process(p.ctx, k, v)
+	err := p.userProcessor.Process(p.ctx, k, v)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func (p *Process0rNode[Kin, Vin, Kout, Vout]) Process(k Kin, v Vin) error {
 }
 
 func (p *Process0rNode[Kin, Vin, Kout, Vout]) Init(stores ...sdk.Store) error {
-	return p.processor.Init(stores...)
+	return p.userProcessor.Init(stores...)
 }
 
 func (p *Process0rNode[Kin, Vin, Kout, Vout]) Close() error {
