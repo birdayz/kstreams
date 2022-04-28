@@ -1,12 +1,14 @@
 package internal
 
 import (
+	"context"
+
 	"github.com/birdayz/streamz/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 type RecordProcessor interface {
-	Process(m *kgo.Record) error
+	Process(ctx context.Context, m *kgo.Record) error
 }
 
 type SourceNode[K any, V any] struct {
@@ -16,7 +18,7 @@ type SourceNode[K any, V any] struct {
 	Nexts []GenericProcessor[K, V]
 }
 
-func (n *SourceNode[K, V]) Process(m *kgo.Record) error {
+func (n *SourceNode[K, V]) Process(ctx context.Context, m *kgo.Record) error {
 	key, err := n.KeyDeserializer(m.Key)
 	if err != nil {
 		return err
@@ -28,7 +30,7 @@ func (n *SourceNode[K, V]) Process(m *kgo.Record) error {
 	}
 
 	for _, next := range n.Nexts {
-		if err := next.Process(key, value); err != nil {
+		if err := next.Process(ctx, key, value); err != nil {
 			return err
 		}
 	}

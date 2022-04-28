@@ -1,5 +1,7 @@
 package internal
 
+import "context"
+
 type GenericProcessor[K any, V any] interface {
-	Process(K, V) error
+	Process(context.Context, K, V) error
 }

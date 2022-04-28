@@ -31,7 +31,7 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 			return fmt.Errorf("unknown topic: %s", record.Topic)
 		}
 
-		if err := p.Process(record); err != nil {
+		if err := p.Process(ctx, record); err != nil {
 			return fmt.Errorf("failed to process record: %w", err)
 		}
 		t.committableOffsets[record.Topic] = record.Offset + 1

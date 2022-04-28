@@ -1,10 +1,16 @@
 package internal
 
-import "github.com/birdayz/streamz/sdk"
+import (
+	"context"
+
+	"github.com/birdayz/streamz/sdk"
+)
 
 type Nexter[K, V any] interface {
 	AddNext(GenericProcessor[K, V])
 }
+
+var _ = GenericProcessor[any, any](&Process0rNode[any, any, any, any]{})
 
 type Process0rNode[Kin any, Vin any, Kout any, Vout any] struct {
 	userProcessor sdk.Processor[Kin, Vin, Kout, Vout]
@@ -13,7 +19,9 @@ type Process0rNode[Kin any, Vin any, Kout any, Vout any] struct {
 	ctx *ProcessorContext[Kout, Vout]
 }
 
-func (p *Process0rNode[Kin, Vin, Kout, Vout]) Process(k Kin, v Vin) error {
+func (p *Process0rNode[Kin, Vin, Kout, Vout]) Process(ctx context.Context, k Kin, v Vin) error {
+	// FIXME create ctx here, not anywhere else (topo)
+	// set ctx in..ctx
 	err := p.userProcessor.Process(p.ctx, k, v)
 	if err != nil {
 		return err

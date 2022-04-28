@@ -8,6 +8,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+var _ = GenericProcessor[any, any](&SinkNode[any, any]{})
+
 type SinkNode[K any, V any] struct {
 	KeySerializer   sdk.Serializer[K]
 	ValueSerializer sdk.Serializer[V]
@@ -25,7 +27,7 @@ func NewSinkNode[K, V any](client *kgo.Client, topic string, keySerializer sdk.S
 	}
 }
 
-func (s *SinkNode[K, V]) Process(k K, v V) error {
+func (s *SinkNode[K, V]) Process(ctx context.Context, k K, v V) error {
 	key, err := s.KeySerializer(k)
 	if err != nil {
 		return fmt.Errorf("sinkNode: failed to marshal key: %w", err)
