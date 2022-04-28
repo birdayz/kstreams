@@ -1,11 +1,14 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 	"go.uber.org/multierr"
 	"golang.org/x/exp/slices"
 )
@@ -125,7 +128,7 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 			for i, task := range t.tasks {
 				if slices.Equal(task.topics, pg.partitionGroup.sourceTopics) && task.partition == partition {
 					found = true
-					if err := task.Close(); err != nil {
+					if err := task.Close(context.TODO()); err != nil {
 						return err
 					}
 					t.tasks = slices.Delete(t.tasks, i, i+1)
@@ -141,20 +144,68 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 	return nil
 }
 
-func (t *TaskManager) Commit() error {
-	var err error
+// Commit triggers a commit. This flushes all tasks' stores, and then
+// performs a commit of all tasks' processed records.
+func (t *TaskManager) Commit(ctx context.Context) error {
 	for _, task := range t.tasks {
-		err = multierr.Append(task.Commit(t.client), err)
+		task.FlushStores(ctx)
 	}
-	return err
+	return t.commit(ctx)
 }
 
-func (t *TaskManager) Close() error {
-	var err error
-	err = multierr.Append(err, t.Commit())
+func (t *TaskManager) commit(ctx context.Context) error {
+	data := map[string]map[int32]kgo.EpochOffset{}
 
 	for _, task := range t.tasks {
-		err = multierr.Append(err, task.Close())
+		commit := task.GetOffsetsToCommit()
+		for topic, offset := range commit {
+			// need p
+			if _, ok := data[topic]; !ok {
+				data[topic] = make(map[int32]kgo.EpochOffset)
+			}
+			data[topic][task.partition] = kgo.EpochOffset{Offset: offset}
+		}
+	}
+	errCh := make(chan error, 1)
+
+	t.client.CommitOffsetsSync(context.Background(), data, func(c *kgo.Client, ocr1 *kmsg.OffsetCommitRequest, ocr2 *kmsg.OffsetCommitResponse, e error) {
+		if e != nil {
+			errCh <- e
+			return
+		}
+
+		for _, t := range ocr2.Topics {
+			for _, p := range t.Partitions {
+				err := kerr.ErrorForCode(p.ErrorCode)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}
+
+		errCh <- nil
+
+	})
+
+	err := <-errCh
+	if err != nil {
+		return err
+	}
+
+	for _, task := range t.tasks {
+		task.ClearOffsets()
+	}
+
+	return nil
+}
+
+func (t *TaskManager) Close(ctx context.Context) error {
+	var err error
+	err = multierr.Append(err, t.Commit(ctx))
+
+	for _, task := range t.tasks {
+		err = multierr.Append(err, task.Close(ctx))
 	}
 
 	return err

@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -17,7 +18,7 @@ func (s *pebbleStore) Init() error {
 	return nil
 }
 
-func (s *pebbleStore) Flush() error {
+func (s *pebbleStore) Flush(ctx context.Context) error {
 	return s.db.Flush()
 }
 

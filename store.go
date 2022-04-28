@@ -1,6 +1,7 @@
 package streamz
 
 import (
+	"context"
 	"errors"
 
 	"github.com/birdayz/streamz/internal"
@@ -44,8 +45,8 @@ func (t *KeyValueStore[K, V]) Init() error {
 	return t.store.Init()
 }
 
-func (t *KeyValueStore[K, V]) Flush() error {
-	return t.store.Flush()
+func (t *KeyValueStore[K, V]) Flush(ctx context.Context) error {
+	return t.store.Flush(ctx)
 }
 
 func (t *KeyValueStore[K, V]) Close() error {

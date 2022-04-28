@@ -168,18 +168,23 @@ func (r *Worker) handleRunning() {
 		count := 0
 		fetch.EachRecord(func(record *kgo.Record) {
 			count++
-			if err := task.Process(record); err != nil {
-				r.log.Error(err, "Failed to process record") // TODO - handle.
+
+			recordCtx, cancel := context.WithTimeout(ctx, time.Second*60)
+			err := task.Process(recordCtx, record)
+			cancel()
+			if err != nil {
+				r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
 				r.changeState(StateCloseRequested)
 				return
 			}
 		})
 		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 
-		if err := task.Commit(r.client); err != nil {
+		if err := r.taskManager.Commit(ctx); err != nil {
 			r.changeState(StateCloseRequested)
 			return
 		}
+		r.log.V(1).Info("Committed offests")
 
 	})
 }
@@ -219,7 +224,7 @@ func (r *Worker) handleCloseRequested() {
 		wg.Done()
 	}()
 
-	err := r.taskManager.Close()
+	err := r.taskManager.Close(context.TODO())
 	if err != nil {
 		r.log.Error(err, "Failed to close tasks")
 	}

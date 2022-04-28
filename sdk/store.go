@@ -1,8 +1,10 @@
 package sdk
 
+import "context"
+
 type Store interface {
 	Init() error
-	Flush() error
+	Flush(context.Context) error
 	Close() error
 }
 

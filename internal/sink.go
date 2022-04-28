@@ -44,3 +44,7 @@ func (s *SinkNode[K, V]) Process(k K, v V) error {
 
 	return nil
 }
+
+type Flusher interface {
+	Flush(context.Context) error
+}
