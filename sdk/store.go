@@ -21,4 +21,4 @@ type StoreBackend interface {
 }
 
 // TODO/FIXME make store name part of params
-type StoreBuilder func(partition int32) (Store, error)
+type StoreBuilder func(name string, partition int32) (Store, error)

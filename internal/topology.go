@@ -173,8 +173,8 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 	}
 
 	var stores []sdk.Store
-	for _, store := range t.stores {
-		builtStore, err := store(partition)
+	for name, store := range t.stores {
+		builtStore, err := store(name, partition)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build store: %w", err)
 		}

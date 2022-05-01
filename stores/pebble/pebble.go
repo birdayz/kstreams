@@ -49,7 +49,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	return res, nil
 }
 
-func NewStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
+func newStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
 	if stateDir == "" {
 		stateDir = "/tmp/streamz"
 	}
@@ -62,9 +62,9 @@ func NewStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error)
 	return &pebbleStore{db: db}, nil
 }
 
-func NewStoreBuilder(stateDir, storeName string) func(p int32) (sdk.StoreBackend, error) {
-	return func(p int32) (sdk.StoreBackend, error) {
-		return NewStore("/tmp", "mystore", uint32(p))
+func NewStoreBuilder(stateDir string) func(name string, p int32) (sdk.StoreBackend, error) {
+	return func(name string, p int32) (sdk.StoreBackend, error) {
+		return newStore(stateDir, name, uint32(p))
 	}
 }
 
