@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  redpanda:
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "0"
+    image: docker.vectorized.io/vectorized/redpanda:latest
+    ports:
+      - 9092:9092

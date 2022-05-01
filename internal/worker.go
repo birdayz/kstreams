@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -112,13 +111,8 @@ func (r *Worker) changeState(newState RoutineState) {
 	r.state = newState
 }
 
-func (r *Worker) Start() {
-	go func() {
-		labels := pprof.Labels("routine-name", r.name)
-		pprof.Do(context.Background(), labels, func(c context.Context) {
-			r.Loop()
-		})
-	}()
+func (r *Worker) Run() error {
+	return r.Loop()
 }
 
 func (r *Worker) handleRunning() {
@@ -180,6 +174,13 @@ func (r *Worker) handleRunning() {
 		})
 		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 
+		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		if err := r.client.Flush(flushCtx); err != nil {
+			r.log.Error(err, "failed to flush producer")
+			r.changeState(StateCloseRequested)
+			return
+		}
 		if err := r.taskManager.Commit(ctx); err != nil {
 			r.changeState(StateCloseRequested)
 			return
@@ -247,7 +248,7 @@ func (r *Worker) handleCreated() {
 }
 
 // State transitions may only be done from within the loop
-func (r *Worker) Loop() {
+func (r *Worker) Loop() error {
 	for {
 		switch r.state {
 		case StateCreated:
@@ -260,7 +261,7 @@ func (r *Worker) Loop() {
 			r.handleRunning()
 		case StateClosed:
 			r.handleClosed()
-			return
+			return nil
 		}
 	}
 }

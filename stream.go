@@ -2,10 +2,10 @@ package streamz
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/birdayz/streamz/internal"
 	"github.com/go-logr/logr"
+	"golang.org/x/sync/errgroup"
 )
 
 type Option func(*Streamz)
@@ -19,6 +19,8 @@ type Streamz struct {
 	routines []*internal.Worker
 
 	log logr.Logger
+
+	eg *errgroup.Group
 }
 
 var WithNumRoutines = func(n int) Option {
@@ -50,28 +52,30 @@ func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
 	return s
 }
 
-func (c *Streamz) Start() error {
+// Run blocks until it's exited, either by an error or by a graceful shutdown
+// triggered by a call to Close.
+func (c *Streamz) Run() error {
+	grp := errgroup.Group{}
+	c.eg = &grp
 	for i := 0; i < c.numRoutines; i++ {
 		routine, err := internal.NewWorker(c.log.WithName("worker"), fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
 		if err != nil {
 			return err
 		}
 		c.routines = append(c.routines, routine)
-		routine.Start()
+		grp.Go(routine.Run)
 	}
+	grp.Wait()
 	return nil
 }
 
 func (c *Streamz) Close() error {
-	var wg sync.WaitGroup
 	for _, routine := range c.routines {
-		wg.Add(1)
 		go func(routine *internal.Worker) {
 			routine.Close()
-			wg.Done()
 		}(routine)
 	}
 
-	wg.Wait()
+	c.eg.Wait()
 	return nil
 }

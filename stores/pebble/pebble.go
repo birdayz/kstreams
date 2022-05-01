@@ -62,4 +62,10 @@ func NewStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error)
 	return &pebbleStore{db: db}, nil
 }
 
+func NewStoreBuilder(stateDir, storeName string) func(p int32) (sdk.StoreBackend, error) {
+	return func(p int32) (sdk.StoreBackend, error) {
+		return NewStore("/tmp", "mystore", uint32(p))
+	}
+}
+
 var _ = sdk.StoreBackend(&pebbleStore{})

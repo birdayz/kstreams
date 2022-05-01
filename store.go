@@ -12,7 +12,7 @@ var (
 	ErrKeyNotFound = errors.New("store: key not found")
 )
 
-func RegisterStore(t *TopologyBuilder, storeBuilder sdk.StoreBuilder, name string) {
+func RegisterStore(t *Topology, storeBuilder sdk.StoreBuilder, name string) {
 	internal.RegisterStore(t, storeBuilder, name)
 
 }
@@ -80,4 +80,14 @@ func (t *KeyValueStore[K, V]) Get(k K) (V, error) {
 	}
 
 	return t.valueDeserializer(res)
+}
+
+func WrapStore[K, V any](storeBuilder func(p int32) (sdk.StoreBackend, error), keySerde sdk.SerDe[K], valueSerde sdk.SerDe[V]) func(p int32) (sdk.Store, error) {
+	return func(p int32) (sdk.Store, error) {
+		backend, err := storeBuilder(p)
+		if err != nil {
+			return nil, err
+		}
+		return NewKeyValueStore(backend, keySerde.Serializer, valueSerde.Serializer, keySerde.Deserializer, valueSerde.Deserializer), nil
+	}
 }
