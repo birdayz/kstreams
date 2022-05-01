@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/birdayz/streamz v0.0.0-20220410233832-8efff200c41e
-	github.com/birdayz/streamz/stores v0.0.0-20220410233832-8efff200c41e
+	github.com/birdayz/streamz/stores/pebble v0.0.0-20220410233832-8efff200c41e
 	github.com/go-logr/zerologr v1.2.1
 	github.com/rs/zerolog v1.26.1
 )
@@ -35,6 +35,6 @@ require (
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 )
 
-replace github.com/birdayz/streamz/stores => ../stores
+replace github.com/birdayz/streamz/stores/pebble => ../stores/pebble
 
 replace github.com/birdayz/streamz => ../

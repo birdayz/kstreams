@@ -1,4 +1,4 @@
-package stores
+package pebble
 
 import (
 	"context"
@@ -49,7 +49,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	return res, nil
 }
 
-func NewPersistent(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
+func NewStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
 	if stateDir == "" {
 		stateDir = "/tmp/streamz"
 	}

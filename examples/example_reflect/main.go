@@ -10,7 +10,7 @@ import (
 
 	"github.com/birdayz/streamz"
 	"github.com/birdayz/streamz/sdk"
-	"github.com/birdayz/streamz/stores"
+	"github.com/birdayz/streamz/stores/pebble"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 
@@ -35,7 +35,7 @@ func main() {
 	// TODO improve store DX with built-in wrappers around typed store, and easily accessible default
 	// stores pebble for persistent, and map for inmem
 	streamz.RegisterStore(t, func(p int32) sdk.Store {
-		st, err := stores.NewPersistent("/tmp", "mystore", uint32(p))
+		st, err := pebble.NewStore("/tmp", "mystore", uint32(p))
 		if err != nil {
 			panic(err)
 		}
@@ -120,22 +120,4 @@ func (p *MyProcessor2) Init(stores ...sdk.Store) error {
 
 func (p *MyProcessor2) Close() error {
 	return nil
-}
-
-type StoreBuilderImpl struct {
-}
-
-func (s *StoreBuilderImpl) Name() string {
-	return "somestore"
-}
-
-func (s *StoreBuilderImpl) Build(p int32) sdk.Store {
-	st, err := stores.NewPersistent("/tmp", "mystore", uint32(p))
-	if err != nil {
-		panic(err)
-	}
-
-	typed := streamz.NewKeyValueStore(st, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
-
-	return typed
 }
