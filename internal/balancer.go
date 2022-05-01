@@ -75,6 +75,18 @@ type WrappingMemberBalancer struct {
 	log logr.Logger
 }
 
+type BalanceError struct {
+	err error
+}
+
+func (e *BalanceError) IntoSyncAssignment() []kmsg.SyncGroupRequestGroupAssignment {
+	return nil
+}
+
+func (e *BalanceError) IntoSyncAssignmentOrError() ([]kmsg.SyncGroupRequestGroupAssignment, error) {
+	return nil, e.err
+}
+
 func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncAssignment {
 	firstTopics := make([]string, 0, len(wb.pgs))
 	additionals := map[string][]string{} // firstTopics => rest
@@ -108,10 +120,10 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 			}
 		}
 		if imbalance {
-			topics[firstTopic] = safePartitions
 			pgTopics := []string{firstTopic}
 			pgTopics = append(pgTopics, additionals[firstTopic]...)
-			wb.log.Error(nil, "PartitionGroup not co-partitioned. Ignoring excess partitions", "partitionGroupTopics", pgTopics, "usedPartitions", safePartitions)
+			wb.log.Error(nil, "PartitionGroup not co-partitioned.", "partitionGroupTopics", pgTopics, "usedPartitions", safePartitions)
+			return &BalanceError{err: fmt.Errorf("PartitionGroup is not co-partitioned")}
 		}
 	}
 

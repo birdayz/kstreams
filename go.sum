@@ -40,6 +40,8 @@ github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/twmb/franz-go v1.2.3-0.20211104052441-7952375c09c0/go.mod h1:e5ZOdNswX/wv+jebWNX49yc9U7zgR18Xovj9ckk6mx8=
 github.com/twmb/franz-go v1.4.2 h1:IFODFa111Wf5+5L5XOymWS2HIL47yFzbgbA2yQFkUAk=
 github.com/twmb/franz-go v1.4.2/go.mod h1:GFlQnHkJkC7gBoZRW3Sj1mWLPc8nkGW1ZcofBFzI8ss=
+github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2 h1:G/6uE2o6ky4V90YBl0b7RqLatcNYzvbXwQ3hODaspRo=
+github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2/go.mod h1:GFlQnHkJkC7gBoZRW3Sj1mWLPc8nkGW1ZcofBFzI8ss=
 github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058 h1:zzK73ySQ/KakIQM5qIPKfZnBEdvjNeAsryL1cPbyXNY=
 github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058/go.mod h1:fuA2THFeFx/ms1w1R432uxWJqq7o3Q+olvJR4NFpWcM=
 github.com/twmb/franz-go/pkg/kmsg v0.0.0-20211104051938-70808186d5f7/go.mod h1:SxG/xJKhgPu25SamAq0rrucfp7lbzCpEXOC+vH/ELrY=

@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/alecthomas/assert/v2 v2.0.2
 	github.com/go-logr/logr v1.2.3
-	github.com/twmb/franz-go v1.4.2
+	github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
 	github.com/twmb/franz-go/pkg/kmsg v1.0.0
 	go.uber.org/multierr v1.8.0
