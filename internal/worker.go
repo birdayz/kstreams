@@ -176,6 +176,9 @@ func (r *Worker) handleRunning() {
 
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
+
+		// TODO. Flush is not good enough here. It will not fail for sure if
+		// we have outstanding records.
 		if err := r.client.Flush(flushCtx); err != nil {
 			r.log.Error(err, "failed to flush producer")
 			r.changeState(StateCloseRequested)

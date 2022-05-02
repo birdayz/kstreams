@@ -202,7 +202,6 @@ func (t *TaskManager) commit(ctx context.Context) error {
 
 func (t *TaskManager) Close(ctx context.Context) error {
 	var err error
-	err = multierr.Append(err, t.Commit(ctx))
 
 	for _, task := range t.tasks {
 		err = multierr.Append(err, task.Close(ctx))
