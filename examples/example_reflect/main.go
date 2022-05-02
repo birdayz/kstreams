@@ -36,8 +36,11 @@ func init() {
 func main() {
 	t := streamz.NewTopology()
 
-	streamz.RegisterStore(t, streamz.WrapStore(pebble.NewStoreBuilder("/tmp/streamz"), serdes.NewString(), serdes.NewString()), "my-store")
-
+	streamz.RegisterStore(t,
+		streamz.KVStore(
+			pebble.NewStoreBackend("/tmp/streamz"), serdes.String, serdes.String,
+		),
+		"my-store")
 	streamz.RegisterSource(t, "my-topic", "my-topic", serdes.StringDeserializer, serdes.StringDeserializer)
 	streamz.RegisterSource(t, "my-second-topic", "my-second-topic", serdes.StringDeserializer, serdes.StringDeserializer)
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")

@@ -82,7 +82,7 @@ func (t *KeyValueStore[K, V]) Get(k K) (V, error) {
 	return t.valueDeserializer(res)
 }
 
-func WrapStore[K, V any](storeBuilder func(name string, p int32) (sdk.StoreBackend, error), keySerde sdk.SerDe[K], valueSerde sdk.SerDe[V]) func(name string, p int32) (sdk.Store, error) {
+func KVStore[K, V any](storeBuilder func(name string, p int32) (sdk.StoreBackend, error), keySerde sdk.SerDe[K], valueSerde sdk.SerDe[V]) func(name string, p int32) (sdk.Store, error) {
 	return func(name string, p int32) (sdk.Store, error) {
 		backend, err := storeBuilder(name, p)
 		if err != nil {

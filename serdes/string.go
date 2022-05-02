@@ -10,9 +10,7 @@ var StringSerializer = func(data string) ([]byte, error) {
 	return []byte(data), nil
 }
 
-func NewString() sdk.SerDe[string] {
-	return sdk.SerDe[string]{
-		Serializer:   StringSerializer,
-		Deserializer: StringDeserializer,
-	}
+var String = sdk.SerDe[string]{
+	Serializer:   StringSerializer,
+	Deserializer: StringDeserializer,
 }
