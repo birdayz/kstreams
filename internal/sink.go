@@ -38,8 +38,6 @@ func (s *SinkNode[K, V]) Process(ctx context.Context, k K, v V) error {
 		return fmt.Errorf("sinkNode: failed to marshal value: %w", err)
 	}
 
-	fmt.Println("a")
-
 	s.client.Produce(context.Background(), &kgo.Record{
 		Key:   key,
 		Value: value,
