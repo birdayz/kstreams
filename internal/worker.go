@@ -81,7 +81,6 @@ func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, b
 		kgo.OnPartitionsRevoked(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Revoked: m}
 		}),
-		// kgo.WithLogger(kzerolog.New(&log)),
 	)
 	if err != nil {
 		return nil, err
@@ -174,23 +173,26 @@ func (r *Worker) handleRunning() {
 		})
 		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 
-		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		defer cancel()
-
-		// TODO. Flush is not good enough here. It will not fail for sure if
-		// we have outstanding records.
-		if err := r.client.Flush(flushCtx); err != nil {
-			r.log.Error(err, "failed to flush producer")
-			r.changeState(StateCloseRequested)
-			return
-		}
-		if err := r.taskManager.Commit(ctx); err != nil {
+		if err := r.maybeCommit(ctx); err != nil {
+			r.log.Error(err, "failed to commit")
 			r.changeState(StateCloseRequested)
 			return
 		}
 		r.log.V(1).Info("Committed offests")
 
 	})
+}
+
+func (r *Worker) maybeCommit(ctx context.Context) error {
+	if err := r.client.Flush(ctx); err != nil {
+		return err
+	}
+	if err := r.taskManager.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 func (r *Worker) handleClosed() {
@@ -219,6 +221,13 @@ func (r *Worker) handlePartitionsAssigned() {
 func (r *Worker) handleCloseRequested() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+
+	if err := r.client.Flush(context.TODO()); err != nil {
+		r.log.Error(err, "Failed to flush client")
+	}
+	if err := r.taskManager.Commit(context.TODO()); err != nil {
+		r.log.Error(err, "Failed to commit")
+	}
 
 	go func() {
 		// Wait until this is closed

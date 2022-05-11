@@ -21,6 +21,8 @@ type Task struct {
 	committableOffsets map[string]int64 // Topic => offset
 
 	processors map[string]sdk.BaseProcessor
+
+	sinks map[string]Flusher
 }
 
 func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
@@ -72,17 +74,22 @@ func (t *Task) ClearOffsets() {
 	}
 }
 
-func (t *Task) FlushStores(ctx context.Context) error {
+// Flush flushes state stores and sinks.
+func (t *Task) Flush(ctx context.Context) error {
 	var errz error
 
 	for _, store := range t.stores {
 		multierr.AppendInto(&errz, store.Flush(ctx))
 	}
 
+	for _, sink := range t.sinks {
+		multierr.AppendInto(&errz, sink.Flush(ctx))
+	}
+
 	return errz
 }
 
-func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores []sdk.Store, processors map[string]sdk.BaseProcessor) *Task {
+func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores []sdk.Store, processors map[string]sdk.BaseProcessor, sinks map[string]Flusher) *Task {
 	return &Task{
 		rootNodes:          rootNodes,
 		stores:             stores,
@@ -90,5 +97,6 @@ func NewTask(topics []string, partition int32, rootNodes map[string]RecordProces
 		partition:          partition,
 		committableOffsets: map[string]int64{},
 		processors:         processors,
+		sinks:              sinks,
 	}
 }

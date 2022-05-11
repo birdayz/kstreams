@@ -148,9 +148,18 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 // performs a commit of all tasks' processed records.
 func (t *TaskManager) Commit(ctx context.Context) error {
 	for _, task := range t.tasks {
-		task.FlushStores(ctx)
+		if err := task.Flush(ctx); err != nil {
+			return err
+		}
+		t.log.Info("Flushed task")
 	}
-	return t.commit(ctx)
+
+	if err := t.commit(ctx); err != nil {
+		return err
+	}
+
+	t.log.Info("Committed all tasks")
+	return nil
 }
 
 func (t *TaskManager) commit(ctx context.Context) error {

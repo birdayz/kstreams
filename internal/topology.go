@@ -189,7 +189,7 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 	}
 	neededProcessors = slices.Compact(neededProcessors)
 
-	builtSinks := map[string]any{}
+	builtSinks := map[string]Flusher{}
 
 	for _, pr := range neededProcessors {
 		topoProcessor, ok := t.processors[pr]
@@ -244,7 +244,7 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 		ps[topic] = builtProcessors[topic].(RecordProcessor)
 	}
 
-	task := NewTask(topics, partition, ps, stores, builtProcessors)
+	task := NewTask(topics, partition, ps, stores, builtProcessors, builtSinks)
 	return task, nil
 
 }
@@ -285,7 +285,7 @@ func NewTopologyBuilder() *TopologyBuilder {
 
 type TopologySink struct {
 	Name    string
-	Builder func(*kgo.Client) any
+	Builder func(*kgo.Client) Flusher
 }
 
 type TopologyProcessor struct {
@@ -350,7 +350,7 @@ func MustAddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer
 func AddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) error {
 	topoSink := &TopologySink{
 		Name: name,
-		Builder: func(client *kgo.Client) any {
+		Builder: func(client *kgo.Client) Flusher {
 			return NewSinkNode(client, topic, keySerializer, valueSerializer)
 		},
 	}
