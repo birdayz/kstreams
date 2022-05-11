@@ -65,8 +65,7 @@ func (c *Streamz) Run() error {
 		c.routines = append(c.routines, routine)
 		grp.Go(routine.Run)
 	}
-	grp.Wait()
-	return nil
+	return grp.Wait()
 }
 
 func (c *Streamz) Close() error {

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -18,12 +19,12 @@ func sampleTopology(t *testing.T) *TopologyBuilder {
 	err = AddSource(top, "secondsource", "secondsource", StringDeserializer, StringDeserializer)
 	assert.NoError(t, err)
 
-	RegisterStore(top, func(partition int32) sdk.Store {
+	RegisterStore(top, func(name string, partition int32) (sdk.Store, error) {
 		typed := newKVStore(&InMemoryStore{
 			db: map[string][]byte{},
 		}, StringSerializer, StringSerializer, StringDeserializer, StringDeserializer)
 
-		return typed
+		return typed, nil
 	}, "mystore")
 
 	err = AddProcessor(top, func() sdk.Processor[string, string, string, string] {
@@ -120,7 +121,7 @@ func (s *InMemoryStore) Init() error {
 	return nil
 }
 
-func (s *InMemoryStore) Flush() error {
+func (s *InMemoryStore) Flush(ctx context.Context) error {
 	return nil
 }
 
@@ -169,8 +170,8 @@ func (t *keyValueStore[K, V]) Init() error {
 	return t.store.Init()
 }
 
-func (t *keyValueStore[K, V]) Flush() error {
-	return t.store.Flush()
+func (t *keyValueStore[K, V]) Flush(ctx context.Context) error {
+	return t.store.Flush(ctx)
 }
 
 func (t keyValueStore[K, V]) Close() error {
