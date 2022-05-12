@@ -256,7 +256,7 @@ func appendChildren(t *TopologyBuilder, p *TopologyProcessor) []string {
 			res = append(res, appendChildren(t, childProcessor)...)
 		} else {
 			_, ok := t.sinks[child]
-			if !ok { // nolint
+			if !ok {
 				panic("failed to find processor or sink")
 				// TODO FIXME handle. Neither processor, not sink found.
 			}
