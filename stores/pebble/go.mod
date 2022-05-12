@@ -35,3 +35,5 @@ require (
 )
 
 replace github.com/birdayz/streamz => ../../
+
+replace github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
