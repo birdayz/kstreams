@@ -104,6 +104,9 @@ func (t *TaskManager) Assigned(assigned map[string][]int32) error {
 			if err != nil {
 				return errors.New("failed to create task")
 			}
+			if err := task.Init(); err != nil {
+				return fmt.Errorf("failed to init task: %w", err)
+			}
 
 			t.tasks = append(t.tasks, task)
 		}
@@ -151,7 +154,7 @@ func (t *TaskManager) Commit(ctx context.Context) error {
 		if err := task.Flush(ctx); err != nil {
 			return err
 		}
-		t.log.Info("Flushed task")
+		t.log.Info("Flushed task", "task", task)
 	}
 
 	if err := t.commit(ctx); err != nil {

@@ -75,6 +75,5 @@ func (c *Streamz) Close() error {
 		}(routine)
 	}
 
-	c.eg.Wait()
-	return nil
+	return c.eg.Wait()
 }

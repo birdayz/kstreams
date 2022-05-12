@@ -12,17 +12,17 @@ import (
 type Task struct {
 	rootNodes map[string]RecordProcessor // Key = topic
 
-	stores []sdk.Store
+	stores map[string]sdk.Store
 
 	topics    []string
 	partition int32
 
-	needCommit         bool
 	committableOffsets map[string]int64 // Topic => offset
 
 	processors map[string]sdk.BaseProcessor
 
-	sinks map[string]Flusher
+	sinks              map[string]Flusher
+	processorsToStores map[string][]string
 }
 
 func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
@@ -45,12 +45,17 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 func (t *Task) Init() error {
 	var multierror error
 
-	for _, processor := range t.processors {
-		multierr.Append(multierror, processor.Init())
+	for processorName, processor := range t.processors {
+		var stores []sdk.Store
+		for _, store := range t.processorsToStores[processorName] {
+			stores = append(stores, t.stores[store])
+
+		}
+		multierr.AppendInto(&multierror, processor.Init(stores...))
 	}
 
 	for _, store := range t.stores {
-		multierr.Append(multierror, store.Init())
+		multierr.AppendInto(&multierror, store.Init())
 	}
 
 	return multierror
@@ -89,7 +94,11 @@ func (t *Task) Flush(ctx context.Context) error {
 	return errz
 }
 
-func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores []sdk.Store, processors map[string]sdk.BaseProcessor, sinks map[string]Flusher) *Task {
+func (t *Task) String() string {
+	return fmt.Sprintf("%v-%d", t.topics, t.partition)
+}
+
+func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores map[string]sdk.Store, processors map[string]sdk.BaseProcessor, sinks map[string]Flusher, processorToStore map[string][]string) *Task {
 	return &Task{
 		rootNodes:          rootNodes,
 		stores:             stores,
@@ -98,5 +107,6 @@ func NewTask(topics []string, partition int32, rootNodes map[string]RecordProces
 		committableOffsets: map[string]int64{},
 		processors:         processors,
 		sinks:              sinks,
+		processorsToStores: processorToStore,
 	}
 }

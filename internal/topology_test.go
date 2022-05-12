@@ -32,12 +32,14 @@ func sampleTopology(t *testing.T) *TopologyBuilder {
 	}, "myprocessor", "mystore")
 	assert.NoError(t, err)
 	err = SetParent(top, "mysource", "myprocessor")
+	assert.NoError(t, err)
 
 	err = AddProcessor(top, func() sdk.Processor[string, string, string, string] {
 		return &MyProcessor{}
 	}, "myprocessor-2")
 	assert.NoError(t, err)
 	err = SetParent(top, "myprocessor", "myprocessor-2")
+	assert.NoError(t, err)
 
 	err = AddProcessor(top, func() sdk.Processor[string, string, string, string] {
 		return &MyProcessor{}
@@ -99,10 +101,10 @@ func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v strin
 	if err == nil {
 		fmt.Println("Found old value!", k, old)
 	}
-	p.store.Set(k, v)
+	err = p.store.Set(k, v)
 	fmt.Println("New value", k, v)
 	// ctx.Forward(k, v2)
-	return nil
+	return err
 }
 
 var StringDeserializer = func(data []byte) (string, error) {

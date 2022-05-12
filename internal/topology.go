@@ -110,9 +110,7 @@ func (t *TopologyBuilder) partitionGroups() []*PartitionGroup {
 		var storeNames []string
 		for _, child := range processors {
 			if stores, ok := t.processorToStores[child]; ok {
-				for _, store := range stores {
-					storeNames = append(storeNames, store)
-				}
+				storeNames = append(storeNames, stores...)
 			}
 		}
 
@@ -172,13 +170,14 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 		srcs = append(srcs, src)
 	}
 
-	var stores []sdk.Store
+	stores := map[string]sdk.Store{}
 	for name, store := range t.stores {
 		builtStore, err := store(name, partition)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build store: %w", err)
 		}
-		stores = append(stores, builtStore)
+		stores[name] = builtStore
+		fmt.Println(name)
 	}
 
 	builtProcessors := map[string]sdk.BaseProcessor{}
@@ -196,7 +195,6 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 		if ok {
 			built := topoProcessor.Builder()
 
-			built.Init(stores...) // TODO move init into task. Topo only creates, task inits closes
 			builtProcessors[topoProcessor.Name] = built
 		} else {
 			topoSink, ok := t.sinks[pr]
@@ -244,7 +242,7 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 		ps[topic] = builtProcessors[topic].(RecordProcessor)
 	}
 
-	task := NewTask(topics, partition, ps, stores, builtProcessors, builtSinks)
+	task := NewTask(topics, partition, ps, stores, builtProcessors, builtSinks, t.processorToStores)
 	return task, nil
 
 }
@@ -258,8 +256,9 @@ func appendChildren(t *TopologyBuilder, p *TopologyProcessor) []string {
 			res = append(res, appendChildren(t, childProcessor)...)
 		} else {
 			_, ok := t.sinks[child]
-			if !ok {
-				// TODO handle. Neither processor, not sink found.
+			if !ok { // nolint
+				panic("failed to find processor or sink")
+				// TODO FIXME handle. Neither processor, not sink found.
 			}
 
 			// It's a sink. Since this is terminal, we don't need to go further and
