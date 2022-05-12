@@ -6,6 +6,7 @@ require (
 	github.com/birdayz/streamz v0.0.0-20220410233832-8efff200c41e
 	github.com/birdayz/streamz/stores/pebble v0.0.0-20220410233832-8efff200c41e
 	github.com/go-logr/zerologr v1.2.1
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/rs/zerolog v1.26.1
 )
 
@@ -19,7 +20,6 @@ require (
 	github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
-	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
