@@ -95,11 +95,7 @@ func (p *MyProcessor) Close() error {
 }
 
 func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
-	// v2 := v + "-modified"
-	_, err := p.store.Get(k)
-	err = p.store.Set(k, v)
-	// ctx.Forward(k, v2)
-	return err
+	return nil
 }
 
 var StringDeserializer = func(data []byte) (string, error) {

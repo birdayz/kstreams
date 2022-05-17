@@ -102,8 +102,6 @@ func GetFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-var brokers = []Broker{&RedpandaBroker{}}
-
 func TestIntegration(t *testing.T) {
 	var brokers = []struct {
 		name   string
