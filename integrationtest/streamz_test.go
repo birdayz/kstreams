@@ -102,7 +102,7 @@ func GetFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-func TestIntegration(t *testing.T) {
+func TestWithSimpleProcessor(t *testing.T) {
 	var brokers = []struct {
 		name   string
 		broker Broker
@@ -126,9 +126,9 @@ func TestIntegration(t *testing.T) {
 			topo := streamz.NewTopology()
 			streamz.RegisterSource(topo, "source", "source", serdes.StringDeserializer, serdes.StringDeserializer)
 
-			out := make(chan string, 1)
+			out := make(chan [2]string)
 			streamz.RegisterProcessor(topo, func() sdk.Processor[string, string, string, string] {
-				return &SimpleProcessor{
+				return &SpyProcessor{
 					out: out,
 				}
 			}, "my-processor", "source")
@@ -143,29 +143,8 @@ func TestIntegration(t *testing.T) {
 			assert.NoError(t, pr.FirstErr())
 
 			o := <-out
-			assert.Equal(t, "some-key", o)
+			assert.Equal(t, [...]string{"some-key", "some-val"}, o)
 
 		})
 	}
-}
-
-func NewSimpleProcessor() sdk.Processor[string, string, string, string] {
-	return &SimpleProcessor{}
-}
-
-type SimpleProcessor struct {
-	out chan string
-}
-
-func (p *SimpleProcessor) Init(stores ...sdk.Store) error {
-	return nil
-}
-
-func (p *SimpleProcessor) Close() error {
-	return nil
-}
-
-func (p *SimpleProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
-	p.out <- k
-	return nil
 }
