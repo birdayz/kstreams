@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -97,12 +96,8 @@ func (p *MyProcessor) Close() error {
 
 func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
 	// v2 := v + "-modified"
-	old, err := p.store.Get(k)
-	if err == nil {
-		fmt.Println("Found old value!", k, old)
-	}
+	_, err := p.store.Get(k)
 	err = p.store.Set(k, v)
-	fmt.Println("New value", k, v)
 	// ctx.Forward(k, v2)
 	return err
 }

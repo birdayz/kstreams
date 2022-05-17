@@ -35,11 +35,17 @@ var WithLogr = func(log logr.Logger) Option {
 	}
 }
 
-func New(t *internal.TopologyBuilder, opts ...Option) *Streamz {
+var WithBrokers = func(brokers []string) Option {
+	return func(s *Streamz) {
+		s.brokers = brokers
+	}
+}
+
+func New(t *internal.TopologyBuilder, groupName string, opts ...Option) *Streamz {
 	s := &Streamz{
 		numRoutines: 1,
 		brokers:     []string{"localhost:9092"},
-		groupName:   "streamz-app",
+		groupName:   groupName,
 		t:           t,
 		routines:    []*internal.Worker{},
 		log:         logr.Discard(),

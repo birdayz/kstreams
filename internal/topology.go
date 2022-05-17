@@ -177,7 +177,6 @@ func (t *TopologyBuilder) CreateTask(topics []string, partition int32, client *k
 			return nil, fmt.Errorf("failed to build store: %w", err)
 		}
 		stores[name] = builtStore
-		fmt.Println(name)
 	}
 
 	builtProcessors := map[string]sdk.BaseProcessor{}
