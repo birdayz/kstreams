@@ -17,6 +17,3 @@ prototype is being written. Goals are still under work and not yet fully clear.
 ## Non-Goals
 - Exactly-once-delivery
 - Kafka streams-like DSL is out of the question until Go generics support method type parameters.
-
-## To be decided
-- Log to logur or zerolog directly
