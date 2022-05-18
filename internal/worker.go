@@ -268,10 +268,6 @@ func (r *Worker) handleCreated() {
 	}
 }
 
-func (r *Worker) handleError() {
-	r.changeState(StateCloseRequested)
-}
-
 // State transitions may only be done from within the loop
 func (r *Worker) Loop() error {
 	for {
