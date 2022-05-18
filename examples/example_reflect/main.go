@@ -47,7 +47,7 @@ func main() {
 	streamz.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
 	streamz.RegisterSink(t, "my-sink-topic", "my-sink-topic", serdes.StringSerializer, serdes.StringSerializer, "processor-2")
 
-	app := streamz.New(t, streamz.WithNumRoutines(1), streamz.WithLogr(zerologr.New(log)))
+	app := streamz.New(t, "my-app", streamz.WithNumRoutines(1), streamz.WithLogr(zerologr.New(log)))
 
 	go func() {
 		c := make(chan os.Signal)

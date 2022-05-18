@@ -2,6 +2,7 @@ package streamz
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/birdayz/streamz/internal"
 	"github.com/go-logr/logr"
@@ -21,6 +22,8 @@ type Streamz struct {
 	log logr.Logger
 
 	eg *errgroup.Group
+
+	commitInterval time.Duration
 }
 
 var WithNumRoutines = func(n int) Option {
@@ -41,14 +44,21 @@ var WithBrokers = func(brokers []string) Option {
 	}
 }
 
+var WithCommitInterval = func(commitInterval time.Duration) Option {
+	return func(s *Streamz) {
+		s.commitInterval = commitInterval
+	}
+}
+
 func New(t *internal.TopologyBuilder, groupName string, opts ...Option) *Streamz {
 	s := &Streamz{
-		numRoutines: 1,
-		brokers:     []string{"localhost:9092"},
-		groupName:   groupName,
-		t:           t,
-		routines:    []*internal.Worker{},
-		log:         logr.Discard(),
+		numRoutines:    1,
+		brokers:        []string{"localhost:9092"},
+		groupName:      groupName,
+		t:              t,
+		routines:       []*internal.Worker{},
+		log:            logr.Discard(),
+		commitInterval: time.Second * 10,
 	}
 
 	for _, opt := range opts {
@@ -64,7 +74,7 @@ func (c *Streamz) Run() error {
 	grp := errgroup.Group{}
 	c.eg = &grp
 	for i := 0; i < c.numRoutines; i++ {
-		routine, err := internal.NewWorker(c.log.WithName("worker"), fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers)
+		routine, err := internal.NewWorker(c.log.WithName("worker"), fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers, c.commitInterval)
 		if err != nil {
 			return err
 		}

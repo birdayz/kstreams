@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -48,6 +49,9 @@ type Worker struct {
 	maxPollRecords int
 
 	taskManager *TaskManager
+
+	lastSuccessfulCommit time.Time
+	commitInterval       time.Duration
 }
 
 type AssignedOrRevoked struct {
@@ -56,7 +60,7 @@ type AssignedOrRevoked struct {
 }
 
 // Config
-func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, brokers []string) (*Worker, error) {
+func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, brokers []string, commitInterval time.Duration) (*Worker, error) {
 	tm := &TaskManager{
 		tasks:    []*Task{},
 		log:      log,
@@ -98,6 +102,7 @@ func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, b
 		closeRequested:    make(chan struct{}, 1),
 		maxPollRecords:    10000,
 		taskManager:       tm,
+		commitInterval:    commitInterval,
 	}
 	sr.closed.Add(1)
 	return sr, nil
@@ -133,14 +138,14 @@ func (r *Worker) handleRunning() {
 	default:
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	pollCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	r.cancelPoll = cancel
 
 	r.cancelPollMtx.Unlock()
 
 	r.log.V(2).Info("Polling Records")
-	f := r.client.PollRecords(ctx, r.maxPollRecords)
+	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
 	r.log.V(2).Info("Polled Records")
 
 	if f.IsClientClosed() {
@@ -151,7 +156,8 @@ func (r *Worker) handleRunning() {
 	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
 		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 		if err != nil {
-			r.log.Error(err, "failed to get task")
+			r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
+			r.changeState(StateCloseRequested)
 			return
 		}
 
@@ -160,7 +166,7 @@ func (r *Worker) handleRunning() {
 		fetch.EachRecord(func(record *kgo.Record) {
 			count++
 
-			recordCtx, cancel := context.WithTimeout(ctx, time.Second*60)
+			recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 			err := task.Process(recordCtx, record)
 			cancel()
 			if err != nil {
@@ -171,22 +177,27 @@ func (r *Worker) handleRunning() {
 		})
 		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 
-		if err := r.maybeCommit(ctx); err != nil {
-			r.log.Error(err, "failed to commit")
-			r.changeState(StateCloseRequested)
-			return
-		}
-		r.log.V(1).Info("Committed offests")
-
 	})
+
+	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	if err := r.maybeCommit(commitCtx); err != nil {
+		r.log.Error(err, "failed to commit")
+		r.changeState(StateCloseRequested)
+		return
+	}
+	r.log.V(1).Info("Committed offests")
 }
 
 func (r *Worker) maybeCommit(ctx context.Context) error {
-	if err := r.client.Flush(ctx); err != nil {
-		return err
-	}
-	if err := r.taskManager.Commit(ctx); err != nil {
-		return err
+	if time.Since(r.lastSuccessfulCommit) >= r.commitInterval {
+		if err := r.client.Flush(ctx); err != nil {
+			return fmt.Errorf("failed to flush: %w", err)
+		}
+		if err := r.taskManager.Commit(ctx); err != nil {
+			return fmt.Errorf("failed to commit: %w", err)
+		}
+		r.lastSuccessfulCommit = time.Now()
 	}
 
 	return nil
@@ -255,6 +266,10 @@ func (r *Worker) handleCreated() {
 	case <-r.closeRequested:
 		r.changeState(StateCloseRequested)
 	}
+}
+
+func (r *Worker) handleError() {
+	r.changeState(StateCloseRequested)
 }
 
 // State transitions may only be done from within the loop
