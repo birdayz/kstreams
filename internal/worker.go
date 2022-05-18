@@ -57,8 +57,6 @@ type AssignedOrRevoked struct {
 
 // Config
 func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, brokers []string) (*Worker, error) {
-	// Need partition assignor, so we get same partition on all topics. NOT needed yet, as we do not support joins yet, state stores etc.
-
 	tm := &TaskManager{
 		tasks:    []*Task{},
 		log:      log,
