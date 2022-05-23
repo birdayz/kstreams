@@ -9,7 +9,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.13.1-0.20220505090927-dbb7f60fc0de
 	github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
-	github.com/twmb/franz-go/pkg/kmsg v1.0.0
+	github.com/twmb/franz-go/pkg/kmsg v1.1.0
 	go.uber.org/multierr v1.8.0
 	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
