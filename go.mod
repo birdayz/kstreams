@@ -3,7 +3,7 @@ module github.com/birdayz/streamz
 go 1.18
 
 require (
-	github.com/alecthomas/assert/v2 v2.0.2
+	github.com/alecthomas/assert/v2 v2.0.3
 	github.com/docker/go-connections v0.4.0
 	github.com/go-logr/logr v1.2.3
 	github.com/testcontainers/testcontainers-go v0.13.1-0.20220505090927-dbb7f60fc0de
@@ -19,7 +19,7 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/Microsoft/hcsshim v0.9.2 // indirect
-	github.com/alecthomas/repr v0.0.0-20210801044451-80ca428c5142 // indirect
+	github.com/alecthomas/repr v0.1.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/containerd/cgroups v1.0.3 // indirect
 	github.com/containerd/containerd v1.6.1 // indirect
