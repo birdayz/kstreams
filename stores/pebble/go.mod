@@ -37,3 +37,5 @@ require (
 replace github.com/birdayz/streamz => ../../
 
 replace github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
+
+replace gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.0

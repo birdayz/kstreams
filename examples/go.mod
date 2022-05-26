@@ -40,3 +40,5 @@ require (
 replace github.com/birdayz/streamz/stores/pebble => ../stores/pebble
 
 replace github.com/birdayz/streamz => ../
+
+replace gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.0
