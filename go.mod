@@ -58,3 +58,5 @@ require (
 replace github.com/containerd/containerd => github.com/containerd/containerd v1.6.4
 
 replace github.com/docker/distribution => github.com/distribution/distribution v2.8.1+incompatible
+
+replace gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.0
