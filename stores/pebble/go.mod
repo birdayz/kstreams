@@ -16,7 +16,7 @@ require (
 	github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
-	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
@@ -25,7 +25,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2 // indirect
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058 // indirect
-	github.com/twmb/franz-go/pkg/kmsg v1.0.0 // indirect
+	github.com/twmb/franz-go/pkg/kmsg v1.1.0 // indirect
 	github.com/twmb/go-rbtree v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
