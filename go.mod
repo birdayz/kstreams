@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/assert/v2 v2.0.3
 	github.com/docker/go-connections v0.4.0
 	github.com/go-logr/logr v1.2.3
-	github.com/testcontainers/testcontainers-go v0.13.1-0.20220505090927-dbb7f60fc0de
+	github.com/testcontainers/testcontainers-go v0.13.1-0.20220519090050-154b938070bd
 	github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
 	github.com/twmb/franz-go/pkg/kmsg v1.1.0
@@ -52,7 +52,7 @@ require (
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
 	google.golang.org/grpc v1.43.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.0 // indirect
 )
 
 replace github.com/containerd/containerd => github.com/containerd/containerd v1.6.4
