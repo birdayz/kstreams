@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.uber.org/multierr"
 )
 
 type RoutineState string
@@ -52,6 +53,8 @@ type Worker struct {
 
 	lastSuccessfulCommit time.Time
 	commitInterval       time.Duration
+
+	err error
 }
 
 type AssignedOrRevoked struct {
@@ -92,7 +95,7 @@ func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, b
 
 	sr := &Worker{
 		name:              name,
-		log:               log,
+		log:               log.WithValues("worker", name),
 		group:             group,
 		client:            client,
 		adminClient:       kadm.NewClient(client),
@@ -153,7 +156,25 @@ func (r *Worker) handleRunning() {
 		return
 	}
 
+	var errors error
+	for _, fetchError := range f.Errors() {
+		r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
+		multierr.AppendInto(&errors, fetchError.Err)
+	}
+
+	if errors != nil {
+		r.log.Error(errors, "fetch returned error, exiting worker")
+		r.changeState(StateCloseRequested)
+		r.err = errors
+		return
+	}
+
+	var fetches []kgo.FetchTopicPartition
 	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
+		fetches = append(fetches, fetch)
+	})
+
+	for _, fetch := range fetches {
 		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 		if err != nil {
 			r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
@@ -163,6 +184,7 @@ func (r *Worker) handleRunning() {
 
 		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 		count := 0
+		// TODO replace with range; otherwise we will not stop on error
 		fetch.EachRecord(func(record *kgo.Record) {
 			count++
 
@@ -172,18 +194,19 @@ func (r *Worker) handleRunning() {
 			if err != nil {
 				r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
 				r.changeState(StateCloseRequested)
+				r.err = err
 				return
 			}
 		})
 		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
-
-	})
+	}
 
 	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	if err := r.maybeCommit(commitCtx); err != nil {
 		r.log.Error(err, "failed to commit")
 		r.changeState(StateCloseRequested)
+		r.err = err
 		return
 	}
 	r.log.V(1).Info("Committed offests")
@@ -282,7 +305,7 @@ func (r *Worker) Loop() error {
 			r.handleRunning()
 		case StateClosed:
 			r.handleClosed()
-			return nil
+			return r.err
 		}
 	}
 }
