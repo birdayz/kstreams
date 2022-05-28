@@ -184,11 +184,12 @@ func (r *Worker) handleRunning() {
 
 		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 		count := 0
+
 		// TODO replace with range; otherwise we will not stop on error
-		fetch.EachRecord(func(record *kgo.Record) {
+		for _, record := range fetch.Records {
 			count++
 
-			recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+			recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
 			err := task.Process(recordCtx, record)
 			cancel()
 			if err != nil {
@@ -197,7 +198,7 @@ func (r *Worker) handleRunning() {
 				r.err = err
 				return
 			}
-		})
+		}
 		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 	}
 
