@@ -1,7 +1,7 @@
 package sdk
 
 type Context[Kout any, Vout any] interface {
-	Forward(k Kout, v Vout)
+	Forward(k Kout, v Vout, processors ...string)
 }
 
 type BaseProcessor interface {
