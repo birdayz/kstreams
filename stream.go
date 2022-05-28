@@ -26,7 +26,7 @@ type Streamz struct {
 	commitInterval time.Duration
 }
 
-var WithNumRoutines = func(n int) Option {
+var WithWorkersCount = func(n int) Option {
 	return func(s *Streamz) {
 		s.numRoutines = n
 	}
