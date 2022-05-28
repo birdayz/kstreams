@@ -1,8 +1,8 @@
-package streamz
+package kstreams
 
 import (
-	"github.com/birdayz/streamz/internal"
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams/internal"
+	"github.com/birdayz/kstreams/sdk"
 )
 
 type Topology = internal.TopologyBuilder

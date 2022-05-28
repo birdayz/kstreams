@@ -6,9 +6,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/birdayz/streamz"
-	"github.com/birdayz/streamz/serdes"
-	"github.com/birdayz/streamz/stores/pebble"
+	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/serdes"
+	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 
@@ -34,20 +34,20 @@ func init() {
 }
 
 func main() {
-	t := streamz.NewTopology()
+	t := kstreams.NewTopology()
 
-	streamz.RegisterStore(t,
-		streamz.KVStore(
-			pebble.NewStoreBackend("/tmp/streamz"), serdes.String, serdes.String,
+	kstreams.RegisterStore(t,
+		kstreams.KVStore(
+			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.String,
 		),
 		"my-store")
-	streamz.RegisterSource(t, "my-topic", "my-topic", serdes.StringDeserializer, serdes.StringDeserializer)
-	streamz.RegisterSource(t, "my-second-topic", "my-second-topic", serdes.StringDeserializer, serdes.StringDeserializer)
-	streamz.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
-	streamz.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
-	streamz.RegisterSink(t, "my-sink-topic", "my-sink-topic", serdes.StringSerializer, serdes.StringSerializer, "processor-2")
+	kstreams.RegisterSource(t, "my-topic", "my-topic", serdes.StringDeserializer, serdes.StringDeserializer)
+	kstreams.RegisterSource(t, "my-second-topic", "my-second-topic", serdes.StringDeserializer, serdes.StringDeserializer)
+	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
+	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
+	kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serdes.StringSerializer, serdes.StringSerializer, "processor-2")
 
-	app := streamz.New(t, "my-app", streamz.WithWorkersCount(1), streamz.WithLogr(zerologr.New(log)))
+	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
 	go func() {
 		c := make(chan os.Signal)
@@ -57,7 +57,7 @@ func main() {
 		app.Close()
 	}()
 
-	log.Info().Msg("Start streamz")
+	log.Info().Msg("Start kstreams")
 	app.Run()
 	log.Info().Msg("App exited")
 }

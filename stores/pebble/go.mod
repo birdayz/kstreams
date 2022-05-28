@@ -1,9 +1,9 @@
-module github.com/birdayz/streamz/stores
+module github.com/birdayz/kstreams/stores
 
 go 1.18
 
 require (
-	github.com/birdayz/streamz v0.0.0-20220407000846-92fbed7c989e
+	github.com/birdayz/kstreams v0.0.0-20220407000846-92fbed7c989e
 	github.com/cockroachdb/pebble v0.0.0-20220506213004-f8897076324b
 )
 
@@ -34,7 +34,7 @@ require (
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 )
 
-replace github.com/birdayz/streamz => ../../
+replace github.com/birdayz/kstreams => ../../
 
 replace github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 

@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/birdayz/streamz"
-	"github.com/birdayz/streamz/sdk"
-	"github.com/birdayz/streamz/serdes"
+	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/sdk"
+	"github.com/birdayz/kstreams/serdes"
 	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -123,17 +123,17 @@ func TestWithSimpleProcessor(t *testing.T) {
 			_, err = acl.CreateTopics(context.Background(), 10, 1, map[string]*string{}, "source")
 			assert.NoError(t, err)
 
-			topo := streamz.NewTopology()
-			streamz.RegisterSource(topo, "source", "source", serdes.StringDeserializer, serdes.StringDeserializer)
+			topo := kstreams.NewTopology()
+			kstreams.RegisterSource(topo, "source", "source", serdes.StringDeserializer, serdes.StringDeserializer)
 
 			out := make(chan [2]string)
-			streamz.RegisterProcessor(topo, func() sdk.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() sdk.Processor[string, string, string, string] {
 				return &SpyProcessor{
 					out: out,
 				}
 			}, "my-processor", "source")
 
-			app := streamz.New(topo, "test", streamz.WithBrokers(broker.broker.BootstrapServers()))
+			app := kstreams.New(topo, "test", kstreams.WithBrokers(broker.broker.BootstrapServers()))
 			go func() {
 				err := app.Run()
 				assert.NoError(t, err)

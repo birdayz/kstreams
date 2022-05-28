@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams/sdk"
 )
 
 func sampleTopology(t *testing.T) *TopologyBuilder {

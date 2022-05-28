@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams/sdk"
 )
 
 func NewMyProcessor() sdk.Processor[string, string, string, string] {

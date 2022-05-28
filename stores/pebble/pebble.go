@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/birdayz/streamz"
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/sdk"
 	"github.com/cockroachdb/pebble"
 )
 
@@ -37,7 +37,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	v, closer, err := s.db.Get(k)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, streamz.ErrKeyNotFound
+			return nil, kstreams.ErrKeyNotFound
 		}
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 
 func newStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
 	if stateDir == "" {
-		stateDir = "/tmp/streamz"
+		stateDir = "/tmp/kstreams"
 	}
 	dir := fmt.Sprintf("%s/%s/partition-%d", stateDir, name, partition)
 	db, err := pebble.Open(dir, &pebble.Options{})

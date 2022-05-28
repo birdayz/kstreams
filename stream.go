@@ -1,10 +1,10 @@
-package streamz
+package kstreams
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/birdayz/streamz/internal"
+	"github.com/birdayz/kstreams/internal"
 	"github.com/go-logr/logr"
 	"golang.org/x/sync/errgroup"
 )

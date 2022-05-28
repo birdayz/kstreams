@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/multierr"
 )

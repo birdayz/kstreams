@@ -3,7 +3,7 @@ package internal
 import (
 	"context"
 
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams/sdk"
 )
 
 type Nexter[K, V any] interface {

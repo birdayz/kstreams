@@ -1,6 +1,6 @@
 package integrationtest
 
-import "github.com/birdayz/streamz/sdk"
+import "github.com/birdayz/kstreams/sdk"
 
 type SpyProcessor struct {
 	out chan [2]string

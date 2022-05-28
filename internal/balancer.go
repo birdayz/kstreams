@@ -25,7 +25,7 @@ func NewPartitionGroupBalancer(log logr.Logger, pgs []*PartitionGroup) kgo.Group
 }
 
 func (w *PartitionGroupBalancer) ProtocolName() string {
-	return "streamz-partitiongroup-cooperative-sticky"
+	return "kstreams-partitiongroup-cooperative-sticky"
 }
 
 func (w *PartitionGroupBalancer) JoinGroupMetadata(

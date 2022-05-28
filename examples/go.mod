@@ -1,10 +1,10 @@
-module github.com/birdayz/streamz/examples
+module github.com/birdayz/kstreams/examples
 
 go 1.18
 
 require (
-	github.com/birdayz/streamz v0.0.0-20220410233832-8efff200c41e
-	github.com/birdayz/streamz/stores/pebble v0.0.0-20220410233832-8efff200c41e
+	github.com/birdayz/kstreams v0.0.0-20220410233832-8efff200c41e
+	github.com/birdayz/kstreams/stores/pebble v0.0.0-20220410233832-8efff200c41e
 	github.com/go-logr/zerologr v1.2.1
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/rs/zerolog v1.26.1
@@ -37,8 +37,8 @@ require (
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 )
 
-replace github.com/birdayz/streamz/stores/pebble => ../stores/pebble
+replace github.com/birdayz/kstreams/stores/pebble => ../stores/pebble
 
-replace github.com/birdayz/streamz => ../
+replace github.com/birdayz/kstreams => ../
 
 replace gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.0

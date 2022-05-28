@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/birdayz/streamz/sdk"
+	"github.com/birdayz/kstreams/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"golang.org/x/exp/slices"
 )

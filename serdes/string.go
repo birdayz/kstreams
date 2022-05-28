@@ -1,6 +1,6 @@
 package serdes
 
-import "github.com/birdayz/streamz/sdk"
+import "github.com/birdayz/kstreams/sdk"
 
 var StringDeserializer = func(data []byte) (string, error) {
 	return string(data), nil

@@ -1,5 +1,5 @@
-# kaf-streams
-kaf-streams is a stream processing library for go, inspired by kafka streams. This is currently under work, and a 
+# kstreams
+kstreams is a stream processing library for go, inspired by kafka streams. This is currently under work, and a 
 prototype is being written. Goals are still under work and not yet fully clear.
 
 ## Goals
@@ -17,11 +17,3 @@ prototype is being written. Goals are still under work and not yet fully clear.
 ## Non-Goals
 - Exactly-once-delivery
 - Kafka streams-like DSL is out of the question until Go generics support method type parameters.
-
-## Why
-- Built-in error handling primitives / strategies
-- At-least-once-delivery done properly (framework)
-- SerDes
-- State Stores
-- Windowing
-- Esay to manage fan-in/fan-out

@@ -1,4 +1,4 @@
-module github.com/birdayz/streamz
+module github.com/birdayz/kstreams
 
 go 1.18
 
