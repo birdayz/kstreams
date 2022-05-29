@@ -367,7 +367,7 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 	topoProcessor := &TopologyProcessor{
 		Name: name,
 		Builder: func() sdk.BaseProcessor {
-			px := &Processor[Kin, Vin, Kout, Vout]{
+			px := &ProcessorNode[Kin, Vin, Kout, Vout]{
 				userProcessor: p(),
 				outputs:       map[string]GenericProcessor[Kout, Vout]{},
 			}
@@ -377,7 +377,7 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 	}
 
 	topoProcessor.AddChildFunc = func(parent any, child any, childName string) {
-		parentNode, ok := parent.(*Processor[Kin, Vin, Kout, Vout])
+		parentNode, ok := parent.(*ProcessorNode[Kin, Vin, Kout, Vout])
 		if !ok {
 			panic("type error")
 		}

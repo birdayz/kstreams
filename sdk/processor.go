@@ -1,6 +1,9 @@
 package sdk
 
+import "context"
+
 type Context[Kout any, Vout any] interface {
+	context.Context
 	Forward(k Kout, v Vout, processors ...string)
 }
 
