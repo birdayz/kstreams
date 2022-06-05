@@ -9,6 +9,8 @@ import (
 	"github.com/birdayz/kstreams/sdk"
 )
 
+// TODO: consider making these internal again. this representation, is it useful
+// for anybody?
 func WindowKeySerializer[K any](serializer sdk.Serializer[K]) sdk.Serializer[sdk.WindowKey[K]] {
 	return func(wk sdk.WindowKey[K]) ([]byte, error) {
 		buf := bytes.NewBuffer(nil)

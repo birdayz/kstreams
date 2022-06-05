@@ -33,10 +33,10 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	keySerde sdk.SerDe[Kin],
 	stateSerde sdk.SerDe[State],
 ) (
-	func() sdk.Processor[Kin, Vin, Kin, Vout],
+	func() sdk.Processor[Kin, Vin, sdk.WindowKey[Kin], Vout],
 	sdk.StoreBuilder,
 ) {
-	processorBuilder := func() sdk.Processor[Kin, Vin, Kin, Vout] {
+	processorBuilder := func() sdk.Processor[Kin, Vin, sdk.WindowKey[Kin], Vout] {
 		return &WindowedAggregator[Kin, Vin, State, Vout]{
 			timestampExtractor: timestampExtractor,
 			windowSize:         windowSize,
@@ -52,7 +52,7 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 }
 
 // TODO change output Key to WindowKey[Kin]
-func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx sdk.Context[Kin, Vout], k Kin, v Vin) error {
+func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx sdk.Context[sdk.WindowKey[Kin], Vout], k Kin, v Vin) error {
 	ts := p.timestampExtractor(k, v).Truncate(p.windowSize)
 	state, err := p.store.Get(k, ts)
 	if err != nil {
@@ -68,7 +68,10 @@ func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx sdk.Context[Kin,
 		return err
 	}
 
-	ctx.Forward(k, p.finalizeFunc(state))
+	ctx.Forward(sdk.WindowKey[Kin]{
+		Key:  k,
+		Time: ts,
+	}, p.finalizeFunc(state))
 
 	return nil
 }

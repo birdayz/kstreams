@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/processors"
+	"github.com/birdayz/kstreams/sdk"
 	"github.com/birdayz/kstreams/serdes"
 	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/go-logr/zerologr"
@@ -73,16 +73,16 @@ func main() {
 	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
 
 	// TODO: Windowed output key!
-	kstreams.RegisterProcessor(t,
-		processors.ForEach(
-			func(k string, v float64) {
-				fmt.Printf("Got Key=(%v), Value=(%v)\n", k, v)
-			},
-		),
-		"print",
-		"my-agg-processor",
-	)
-	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serdes.StringSerializer, serdes.JSONSerializer[float64](), "my-agg-processor")
+	// kstreams.RegisterProcessor(t,
+	// 	processors.ForEach(
+	// 		func(k string, v float64) {
+	// 			fmt.Printf("Got Key=(%v), Value=(%v)\n", k, v)
+	// 		},
+	// 	),
+	// 	"print",
+	// 	"my-agg-processor",
+	// )
+	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serdes.JSONSerializer[sdk.WindowKey[string]](), serdes.JSONSerializer[float64](), "my-agg-processor")
 
 	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 

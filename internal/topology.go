@@ -377,11 +377,13 @@ func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p sdk.ProcessorB
 	}
 
 	topoProcessor.AddChildFunc = func(parent any, child any, childName string) {
+		// TODO: try to detect these already when building the topology.
 		parentNode, ok := parent.(*ProcessorNode[Kin, Vin, Kout, Vout])
 		if !ok {
 			panic("type error")
 		}
 
+		// TODO: try to detect these already when building the topology.
 		childNode, ok := child.(GenericProcessor[Kout, Vout])
 		if !ok {
 			panic("type error")
