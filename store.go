@@ -24,3 +24,15 @@ func KVStore[K, V any](storeBuilder func(name string, p int32) (sdk.StoreBackend
 		return internal.NewKeyValueStore(backend, keySerde.Serializer, valueSerde.Serializer, keySerde.Deserializer, valueSerde.Deserializer), nil
 	}
 }
+
+func NewWindowStore[K, V any](storeBuilder func(name string, p int32) (sdk.StoreBackend, error), keySerde sdk.SerDe[K], valueSerde sdk.SerDe[V]) func(name string, p int32) (sdk.Store, error) {
+	return func(name string, p int32) (sdk.Store, error) {
+		backend, err := storeBuilder(name, p)
+		if err != nil {
+			return nil, err
+		}
+
+		return internal.NewWindowedKeyValueStore(backend, keySerde.Serializer, valueSerde.Serializer, keySerde.Deserializer, valueSerde.Deserializer), nil
+
+	}
+}
