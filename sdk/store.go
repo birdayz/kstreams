@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type WindowKey[K any] struct {
+	Key  K
+	Time time.Time
+}
+
 type Store interface {
 	Init() error
 	Flush(context.Context) error

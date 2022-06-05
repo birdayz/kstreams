@@ -1,4 +1,4 @@
-package internal
+package serdes
 
 import (
 	"bytes"

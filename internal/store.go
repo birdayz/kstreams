@@ -78,9 +78,9 @@ func (t *KeyValueStore[K, V]) Get(k K) (V, error) {
 
 type WindowedKeyValueStore[K, V any] struct {
 	store                 sdk.StoreBackend
-	windowKeySerializer   sdk.Serializer[WindowKey[K]]
+	windowKeySerializer   sdk.Serializer[sdk.WindowKey[K]]
 	valueSerializer       sdk.Serializer[V]
-	windowKeyDeserializer sdk.Deserializer[WindowKey[K]]
+	windowKeyDeserializer sdk.Deserializer[sdk.WindowKey[K]]
 	valueDeserializer     sdk.Deserializer[V]
 }
 
@@ -101,7 +101,7 @@ func NewWindowedKeyValueStore[K, V any](
 }
 
 func (s *WindowedKeyValueStore[K, V]) Set(k K, v V, t time.Time) error {
-	wk := WindowKey[K]{
+	wk := sdk.WindowKey[K]{
 		Key:  k,
 		Time: t,
 	}
@@ -121,7 +121,7 @@ func (s *WindowedKeyValueStore[K, V]) Set(k K, v V, t time.Time) error {
 func (s *WindowedKeyValueStore[K, V]) Get(k K, t time.Time) (V, error) {
 	var v V
 
-	wk := WindowKey[K]{
+	wk := sdk.WindowKey[K]{
 		Key:  k,
 		Time: t,
 	}
