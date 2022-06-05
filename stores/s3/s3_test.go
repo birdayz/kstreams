@@ -7,6 +7,9 @@ import (
 )
 
 func TestS3(t *testing.T) {
+	// Skip until testcontainer is implemented. this works for now locally
+	// only
+	t.Skip()
 	store, err := newS3Store("mystore", 0)
 	assert.NoError(t, err)
 
