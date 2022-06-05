@@ -1,6 +1,9 @@
 package sdk
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Store interface {
 	Init() error
@@ -12,6 +15,13 @@ type KeyValueStore[K, V any] interface {
 	Store
 	Set(K, V) error
 	Get(K) (V, error)
+}
+
+type WindowedKeyValueStore[K, V any] interface {
+	Store
+	Set(K, V, time.Time) error
+	Get(K, time.Time) (V, error)
+	// Scan
 }
 
 type StoreBackend interface {
