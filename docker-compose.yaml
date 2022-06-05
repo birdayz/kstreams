@@ -1,5 +1,11 @@
 version: "3.9"
 services:
+  minio:
+    command: server /data --console-address ":9001"
+    image: minio/minio:latest
+    ports:
+      - 9000:9000
+      - 9001:9001
   redpanda:
     command:
       - redpanda
