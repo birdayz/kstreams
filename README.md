@@ -17,3 +17,19 @@ prototype is being written. Goals are still under work and not yet fully clear.
 ## Non-Goals
 - Exactly-once-delivery
 - Kafka streams-like DSL is out of the question until Go generics support method type parameters.
+
+## Next steps
+
+### Object storage/S3 backend
+- Minio testcontainer
+- Tests S3
+- Add GCS, generify some code so both s3 and gcs can make use of
+		write-back cache or whatever we add to make it performant
+
+### Windowing
+- Generify, add aggregation processor, which outputs with
+		Key=WindowKey[K], Value=Type of user, uses allows for "state" type
+		which is used in store.
+- Add support for calendar-based aggregations; i.e. properly aggregate
+		time ranges that do not match UTC-day, or span days where daylight
+		savings change the timezone.
