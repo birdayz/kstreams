@@ -71,6 +71,8 @@ func main() {
 	)
 	kstreams.RegisterStore(t, s, "my-agg-store")
 	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
+
+	// TODO: Windowed output key!
 	kstreams.RegisterProcessor(t,
 		processors.ForEach(
 			func(k string, v float64) {
@@ -80,6 +82,7 @@ func main() {
 		"print",
 		"my-agg-processor",
 	)
+	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serdes.StringSerializer, serdes.JSONSerializer[float64](), "my-agg-processor")
 
 	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
