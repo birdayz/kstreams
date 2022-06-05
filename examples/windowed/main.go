@@ -57,17 +57,17 @@ func main() {
 	// kstreams.RegisterProcessor(t, NewMaxAggregator, "temperature-max-aggregator", "sensor-data", "max-aggregation")
 
 	p, s := processors.NewWindowedAggregator(
-		func(s string, sd SensorData) time.Time { return sd.Timestamp },
-		time.Hour,
-		func() WindowState { return WindowState{} },
-		func(sd SensorData, ws WindowState) WindowState {
+		func(s string, sd SensorData) time.Time { return sd.Timestamp }, // extract timestamp from message
+		time.Hour, // window size
+		func() WindowState { return WindowState{} }, // initial state
+		func(sd SensorData, ws WindowState) WindowState { // aggregate
 			ws.Count++
 			return ws
 		},
-		func(ws WindowState) float64 { return float64(ws.Count) },
+		func(ws WindowState) float64 { return float64(ws.Count) }, // finalize result
 		storeBackend,
 		serdes.String,
-		serdes.JSON[WindowState](),
+		serdes.JSON[WindowState](), // store aggregation state as JSON. We could use something much more efficient, like apache arrow
 	)
 	kstreams.RegisterStore(t, s, "my-agg-store")
 	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
@@ -80,14 +80,6 @@ func main() {
 		"print",
 		"my-agg-processor",
 	)
-
-	// TODO, not implemented:
-	// Using store as parent node, which would allow streaming its changes to
-	// topic and/or other processors
-
-	// TODO: interesting are also, avg and more sophisticated aggregations, where
-	// we need to store an intermediate value in the store, which is not the
-	// output value.
 
 	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
