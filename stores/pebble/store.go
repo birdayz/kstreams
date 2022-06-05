@@ -30,6 +30,10 @@ func (s *pebbleStore) Close() error {
 }
 
 func (s *pebbleStore) Set(k, v []byte) error {
+	// Treat nil (==tombstone) as delete
+	if v == nil {
+		return s.db.Delete(k, &pebble.WriteOptions{})
+	}
 	return s.db.Set(k, v, &pebble.WriteOptions{Sync: false})
 }
 

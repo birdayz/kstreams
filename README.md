@@ -41,3 +41,7 @@ prototype is being written. Goals are still under work and not yet fully clear.
 ## Stores 
 - How to allow read access to stores / make available via gRPC or other
 		protocol
+
+## General
+- Explore tombstone handling, some things have to be improved probably
+		so tombstones work "nicely".
