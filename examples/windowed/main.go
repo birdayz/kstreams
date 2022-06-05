@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/processors"
 	"github.com/birdayz/kstreams/serdes"
 	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/go-logr/zerologr"
@@ -36,20 +38,48 @@ func init() {
 func main() {
 	t := kstreams.NewTopology()
 
+	// Use pebble for all stores
+	storeBackend := pebble.NewStoreBackend("/tmp/kstreams")
+
 	kstreams.RegisterStore(t,
 		kstreams.WindowedStore(
-			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.JSON[WindowState](),
+			storeBackend, serdes.String, serdes.JSON[WindowState](),
 		),
 		"custom-aggregation")
 	kstreams.RegisterStore(t,
 		kstreams.WindowedStore(
-			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.Float64,
+			storeBackend, serdes.String, serdes.Float64,
 		),
 		"max-aggregation")
 
 	kstreams.RegisterSource(t, "sensor-data", "sensor-data", serdes.StringDeserializer, serdes.JSONDeserializer[SensorData]())
-	kstreams.RegisterProcessor(t, NewAverageAggregator, "temperature-aggregator", "sensor-data", "custom-aggregation")
-	kstreams.RegisterProcessor(t, NewMaxAggregator, "temperature-max-aggregator", "sensor-data", "max-aggregation")
+	// kstreams.RegisterProcessor(t, NewAverageAggregator, "temperature-aggregator", "sensor-data", "custom-aggregation")
+	// kstreams.RegisterProcessor(t, NewMaxAggregator, "temperature-max-aggregator", "sensor-data", "max-aggregation")
+
+	p, s := processors.NewWindowedAggregator(
+		func(s string, sd SensorData) time.Time { return sd.Timestamp },
+		time.Hour,
+		func() WindowState { return WindowState{} },
+		func(sd SensorData, ws WindowState) WindowState {
+			ws.Count++
+			return ws
+		},
+		func(ws WindowState) float64 { return float64(ws.Count) },
+		storeBackend,
+		serdes.String,
+		serdes.JSON[WindowState](),
+	)
+	kstreams.RegisterStore(t, s, "my-agg-store")
+	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
+	kstreams.RegisterProcessor(t,
+		processors.ForEach(
+			func(k string, v float64) {
+				fmt.Printf("Got Key=(%v), Value=(%v)\n", k, v)
+			},
+		),
+		"print",
+		"my-agg-processor",
+	)
 
 	// TODO, not implemented:
 	// Using store as parent node, which would allow streaming its changes to

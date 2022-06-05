@@ -34,3 +34,6 @@ prototype is being written. Goals are still under work and not yet fully clear.
 		time ranges that do not match UTC-day, or span days where daylight
 		savings change the timezone.
 - Performance: add benchmarks
+- Cleanup. When are value deleted from db? Can we just delegate it to
+		the store ? (Pebble TTL, cleanup policy of bucket)
+- Add record timestamp to context
