@@ -37,3 +37,7 @@ prototype is being written. Goals are still under work and not yet fully clear.
 - Cleanup. When are value deleted from db? Can we just delegate it to
 		the store ? (Pebble TTL, cleanup policy of bucket)
 - Add record timestamp to context
+
+## Stores 
+- How to allow read access to stores / make available via gRPC or other
+		protocol
