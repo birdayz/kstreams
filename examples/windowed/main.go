@@ -40,9 +40,16 @@ func main() {
 		kstreams.WindowedStore(
 			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.JSON[WindowState](),
 		),
-		"temperature-averages")
+		"custom-aggregation")
+	kstreams.RegisterStore(t,
+		kstreams.WindowedStore(
+			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.Float64,
+		),
+		"max-aggregation")
+
 	kstreams.RegisterSource(t, "sensor-data", "sensor-data", serdes.StringDeserializer, serdes.JSONDeserializer[SensorData]())
-	kstreams.RegisterProcessor(t, NewMyProcessor, "temperature-aggregator", "sensor-data", "temperature-averages")
+	kstreams.RegisterProcessor(t, NewAverageAggregator, "temperature-aggregator", "sensor-data", "custom-aggregation")
+	kstreams.RegisterProcessor(t, NewMaxAggregator, "temperature-max-aggregator", "sensor-data", "max-aggregation")
 
 	// TODO, not implemented:
 	// Using store as parent node, which would allow streaming its changes to

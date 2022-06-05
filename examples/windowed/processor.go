@@ -12,27 +12,27 @@ type WindowState struct {
 	Values []float64
 }
 
-func NewMyProcessor() sdk.Processor[string, SensorData, string, float64] {
-	return &MyProcessor{}
+func NewAverageAggregator() sdk.Processor[string, SensorData, string, float64] {
+	return &AvgAggregator{}
 }
 
-type MyProcessor struct {
+type AvgAggregator struct {
 	store sdk.WindowedKeyValueStore[string, WindowState]
 }
 
-func (p *MyProcessor) Init(stores ...sdk.Store) error {
+func (p *AvgAggregator) Init(stores ...sdk.Store) error {
 	if len(stores) > 0 {
 		p.store = stores[0].(sdk.WindowedKeyValueStore[string, WindowState])
 	}
 	return nil
 }
 
-func (p *MyProcessor) Close() error {
+func (p *AvgAggregator) Close() error {
 	return nil
 }
 
 // TODO make output key WindowKey[string], and generalize this
-func (p *MyProcessor) Process(ctx sdk.Context[string, float64], k string, v SensorData) error {
+func (p *AvgAggregator) Process(ctx sdk.Context[string, float64], k string, v SensorData) error {
 	// Use start of hour as timestamp
 	windowStart := v.Timestamp.Truncate(time.Hour)
 	state, err := p.store.Get(k, windowStart)
