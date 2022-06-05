@@ -33,3 +33,4 @@ prototype is being written. Goals are still under work and not yet fully clear.
 - Add support for calendar-based aggregations; i.e. properly aggregate
 		time ranges that do not match UTC-day, or span days where daylight
 		savings change the timezone.
+- Performance: add benchmarks
