@@ -34,6 +34,9 @@ func WindowKeySerializer[K any](serializer sdk.Serializer[K]) sdk.Serializer[sdk
 		}
 
 		ts, err := wk.Time.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
 		if _, err := buf.Write(ts); err != nil {
 			return nil, err
 		}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/birdayz/kstreams/sdk"
+	"github.com/birdayz/kstreams/serdes"
 )
 
 func RegisterStore(t *TopologyBuilder, storeBuilder sdk.StoreBuilder, name string) {
@@ -93,9 +94,9 @@ func NewWindowedKeyValueStore[K, V any](
 ) *WindowedKeyValueStore[K, V] {
 	return &WindowedKeyValueStore[K, V]{
 		store:                 store,
-		windowKeySerializer:   WindowKeySerializer(keySerializer),
+		windowKeySerializer:   serdes.WindowKeySerializer(keySerializer),
 		valueSerializer:       valueSerializer,
-		windowKeyDeserializer: WindowKeyDeserializer(windowKeyDeserializer),
+		windowKeyDeserializer: serdes.WindowKeyDeserializer(windowKeyDeserializer),
 		valueDeserializer:     valueDeserializer,
 	}
 }

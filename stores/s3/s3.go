@@ -43,8 +43,7 @@ func (s *s3Store) Set(k, v []byte) error {
 }
 
 func (s *s3Store) Get(k []byte) ([]byte, error) {
-	ctx := context.Background()
-	s.client.GetObject(ctx, s.bucket, s.objectName(string(k)), minio.GetObjectOptions{})
+	// TODO
 	return nil, nil
 }
 
