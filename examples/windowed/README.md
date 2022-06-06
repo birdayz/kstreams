@@ -4,6 +4,7 @@
 
 ```shell
 kaf topic create sensor-data -p 4 -b localhost:9092
+kaf topic create message-count -p 4 -b localhost:9092
 
 ```
 
