@@ -8,7 +8,7 @@ import (
 
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/serdes"
-	"github.com/birdayz/kstreams/stores/s3"
+	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 
@@ -38,7 +38,7 @@ func main() {
 
 	kstreams.RegisterStore(t,
 		kstreams.KVStore(
-			s3.NewStoreBackend(), serdes.String, serdes.String,
+			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.String,
 		),
 		"my-store")
 	kstreams.RegisterSource(t, "my-topic", "my-topic", serdes.StringDeserializer, serdes.StringDeserializer)
