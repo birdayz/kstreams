@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/birdayz/kstreams/sdk"
+	"github.com/hashicorp/go-multierror"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"go.uber.org/multierr"
 )
 
 type Task struct {
@@ -43,7 +43,7 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 }
 
 func (t *Task) Init() error {
-	var multierror error
+	var err error
 
 	for processorName, processor := range t.processors {
 		var stores []sdk.Store
@@ -51,20 +51,20 @@ func (t *Task) Init() error {
 			stores = append(stores, t.stores[store])
 
 		}
-		multierr.AppendInto(&multierror, processor.Init(stores...))
+		err = multierror.Append(err, processor.Init(stores...))
 	}
 
 	for _, store := range t.stores {
-		multierr.AppendInto(&multierror, store.Init())
+		err = multierror.Append(err, store.Init())
 	}
 
-	return multierror
+	return err
 }
 
 func (t *Task) Close(ctx context.Context) error {
 	var err error
 	for _, store := range t.stores {
-		err = multierr.Append(err, store.Close())
+		err = multierror.Append(err, store.Close())
 	}
 	return err
 }
@@ -81,17 +81,17 @@ func (t *Task) ClearOffsets() {
 
 // Flush flushes state stores and sinks.
 func (t *Task) Flush(ctx context.Context) error {
-	var errz error
+	var err error
 
 	for _, store := range t.stores {
-		multierr.AppendInto(&errz, store.Flush(ctx))
+		err = multierror.Append(err, store.Flush(ctx))
 	}
 
 	for _, sink := range t.sinks {
-		multierr.AppendInto(&errz, sink.Flush(ctx))
+		err = multierror.Append(err, sink.Flush(ctx))
 	}
 
-	return errz
+	return err
 }
 
 func (t *Task) String() string {

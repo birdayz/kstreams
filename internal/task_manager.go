@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/hashicorp/go-multierror"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
-	"go.uber.org/multierr"
 	"golang.org/x/exp/slices"
 )
 
@@ -216,7 +216,7 @@ func (t *TaskManager) Close(ctx context.Context) error {
 	var err error
 
 	for _, task := range t.tasks {
-		err = multierr.Append(err, task.Close(ctx))
+		err = multierror.Append(err, task.Close(ctx))
 	}
 
 	return err

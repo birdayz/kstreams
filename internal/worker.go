@@ -9,7 +9,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"go.uber.org/multierr"
 )
 
 type RoutineState string
@@ -156,17 +155,13 @@ func (r *Worker) handleRunning() {
 		return
 	}
 
-	var errors error
 	for _, fetchError := range f.Errors() {
 		r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
-		multierr.AppendInto(&errors, fetchError.Err)
-	}
-
-	if errors != nil {
-		r.log.Error(errors, "fetch returned error, exiting worker")
-		r.changeState(StateCloseRequested)
-		r.err = errors
-		return
+		if fetchError.Err != nil {
+			r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
+			r.changeState(StateCloseRequested)
+			return
+		}
 	}
 
 	var fetches []kgo.FetchTopicPartition
@@ -175,6 +170,7 @@ func (r *Worker) handleRunning() {
 	})
 
 	for _, fetch := range fetches {
+		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 		if err != nil {
 			r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
@@ -182,10 +178,8 @@ func (r *Worker) handleRunning() {
 			return
 		}
 
-		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 		count := 0
 
-		// TODO replace with range; otherwise we will not stop on error
 		for _, record := range fetch.Records {
 			count++
 
