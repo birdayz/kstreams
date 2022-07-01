@@ -33,12 +33,12 @@ func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Process(ctx context.Context, k Kin
 		return err
 	}
 
-	var errs error
+	var errs *multierror.Error
 	for _, err := range userCtx.outputErrors {
 		errs = multierror.Append(errs, err)
 	}
 
-	return errs
+	return errs.ErrorOrNil()
 }
 
 func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Init(stores ...sdk.Store) error {

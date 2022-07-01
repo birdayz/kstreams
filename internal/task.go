@@ -43,7 +43,7 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 }
 
 func (t *Task) Init() error {
-	var err error
+	var err *multierror.Error
 
 	for processorName, processor := range t.processors {
 		var stores []sdk.Store
@@ -58,15 +58,15 @@ func (t *Task) Init() error {
 		err = multierror.Append(err, store.Init())
 	}
 
-	return err
+	return err.ErrorOrNil()
 }
 
 func (t *Task) Close(ctx context.Context) error {
-	var err error
+	var err *multierror.Error
 	for _, store := range t.stores {
 		err = multierror.Append(err, store.Close())
 	}
-	return err
+	return err.ErrorOrNil()
 }
 
 func (t *Task) GetOffsetsToCommit() map[string]int64 {
@@ -81,7 +81,7 @@ func (t *Task) ClearOffsets() {
 
 // Flush flushes state stores and sinks.
 func (t *Task) Flush(ctx context.Context) error {
-	var err error
+	var err *multierror.Error
 
 	for _, store := range t.stores {
 		err = multierror.Append(err, store.Flush(ctx))
@@ -91,7 +91,7 @@ func (t *Task) Flush(ctx context.Context) error {
 		err = multierror.Append(err, sink.Flush(ctx))
 	}
 
-	return err
+	return err.ErrorOrNil()
 }
 
 func (t *Task) String() string {

@@ -213,13 +213,13 @@ func (t *TaskManager) commit(ctx context.Context) error {
 }
 
 func (t *TaskManager) Close(ctx context.Context) error {
-	var err error
+	var err *multierror.Error
 
 	for _, task := range t.tasks {
 		err = multierror.Append(err, task.Close(ctx))
 	}
 
-	return err
+	return err.ErrorOrNil()
 }
 
 func (t *TaskManager) TaskFor(topic string, partition int32) (*Task, error) {

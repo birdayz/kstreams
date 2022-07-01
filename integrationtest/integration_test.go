@@ -11,6 +11,7 @@ import (
 	"github.com/birdayz/kstreams/sdk"
 	"github.com/birdayz/kstreams/serdes"
 	"github.com/docker/go-connections/nat"
+	"github.com/go-logr/stdr"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -133,7 +134,7 @@ func TestWithSimpleProcessor(t *testing.T) {
 				}
 			}, "my-processor", "source")
 
-			app := kstreams.New(topo, "test", kstreams.WithBrokers(broker.broker.BootstrapServers()))
+			app := kstreams.New(topo, "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLogr(stdr.New(nil)))
 			go func() {
 				err := app.Run()
 				assert.NoError(t, err)

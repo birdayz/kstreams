@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/assert/v2 v2.1.0
 	github.com/birdayz/kstreams v0.0.0-20220407000846-92fbed7c989e
 	github.com/docker/go-connections v0.4.0
+	github.com/go-logr/stdr v1.2.2
 	github.com/testcontainers/testcontainers-go v0.13.1-0.20220519090050-154b938070bd
 	github.com/twmb/franz-go v1.4.3-0.20220501054214-8148c55adcd2
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
@@ -19,6 +20,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/containerd/cgroups v1.0.3 // indirect
 	github.com/containerd/containerd v1.6.6 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/docker v20.10.11+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect
