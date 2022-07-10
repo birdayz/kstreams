@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/birdayz/kstreams/sdk"
 	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -119,6 +120,19 @@ func (r *Worker) Run() error {
 	return r.Loop()
 }
 
+func headersFromKgo(in []kgo.RecordHeader) sdk.Headers {
+	headers := make(sdk.Headers, 0, len(in))
+
+	for _, header := range in {
+		headers = append(headers, sdk.Header{
+			Key:   header.Key,
+			Value: header.Value,
+		})
+	}
+
+	return headers
+}
+
 func (r *Worker) handleRunning() {
 	r.cancelPollMtx.Lock()
 
@@ -183,7 +197,15 @@ func (r *Worker) handleRunning() {
 		for _, record := range fetch.Records {
 			count++
 
-			recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
+			ctx := SetRecordMetadata(context.Background(), sdk.RecordMetadata{
+				Topic:     record.Topic,
+				Partition: record.Partition,
+				Offset:    record.Offset,
+				Timestamp: record.Timestamp,
+				Headers:   headersFromKgo(record.Headers),
+			})
+
+			recordCtx, cancel := context.WithTimeout(ctx, time.Second*60)
 			err := task.Process(recordCtx, record)
 			cancel()
 			if err != nil {

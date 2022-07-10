@@ -32,7 +32,7 @@ func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v strin
 	}
 	p.store.Set(k, v)
 	fmt.Println("New value", k, v)
-	ctx.Forward(k, v)
+	ctx.Forward(k, v, sdk.ToProcessors("abc"))
 	return nil
 }
 
