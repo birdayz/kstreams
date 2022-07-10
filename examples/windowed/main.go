@@ -84,6 +84,7 @@ func main() {
 	// )
 	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serdes.JSONSerializer[sdk.WindowKey[string]](), serdes.JSONSerializer[float64](), "my-agg-processor")
 
+	t.Draw()
 	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
 	go func() {

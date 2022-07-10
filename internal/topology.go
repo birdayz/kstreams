@@ -25,6 +25,49 @@ type TopologyBuilder struct {
 	childNodes map[string][]string
 }
 
+func (t *TopologyBuilder) Draw() {
+	fmt.Println("graph TD")
+
+	for parent := range t.childNodes {
+		fmt.Printf("%s", parent)
+
+		switch t.nodeType(parent) {
+		case "source":
+			fmt.Printf("[%s]\n", parent)
+		case "processor":
+			fmt.Printf("(%s)\n", parent)
+		case "sink":
+			fmt.Printf("[processor: %s]\n", parent)
+		}
+	}
+
+	for parent, children := range t.childNodes {
+		for _, child := range children {
+			fmt.Printf("\t%s --> %s\n", parent, child)
+		}
+	}
+}
+
+func (t *TopologyBuilder) nodeType(name string) string {
+	if _, ok := t.sources[name]; ok {
+		return "source"
+	}
+
+	if _, ok := t.sinks[name]; ok {
+		return "sink"
+	}
+
+	if _, ok := t.processors[name]; ok {
+		return "processor"
+	}
+
+	if _, ok := t.stores[name]; ok {
+		return "store"
+	}
+
+	return ""
+}
+
 // PartitionGroup is a set of processor names
 type PartitionGroup struct {
 	sourceTopics   []string
