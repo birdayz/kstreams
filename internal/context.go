@@ -17,5 +17,13 @@ func (c *ProcessorContext[Kout, Vout]) Forward(k Kout, v Vout, processorNames ..
 				c.outputErrors = append(c.outputErrors, err)
 			}
 		}
+	} else {
+		for _, name := range processorNames {
+			if p, ok := c.outputs[name]; ok {
+				if err := p.Process(c, k, v); err != nil {
+					c.outputErrors = append(c.outputErrors, err)
+				}
+			}
+		}
 	}
 }
