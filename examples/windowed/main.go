@@ -41,20 +41,7 @@ func main() {
 	// Use pebble for all stores
 	storeBackend := pebble.NewStoreBackend("/tmp/kstreams")
 
-	kstreams.RegisterStore(t,
-		kstreams.WindowedStore(
-			storeBackend, serdes.String, serdes.JSON[WindowState](),
-		),
-		"custom-aggregation")
-	kstreams.RegisterStore(t,
-		kstreams.WindowedStore(
-			storeBackend, serdes.String, serdes.Float64,
-		),
-		"max-aggregation")
-
 	kstreams.RegisterSource(t, "sensor-data", "sensor-data", serdes.StringDeserializer, serdes.JSONDeserializer[SensorData]())
-	// kstreams.RegisterProcessor(t, NewAverageAggregator, "temperature-aggregator", "sensor-data", "custom-aggregation")
-	// kstreams.RegisterProcessor(t, NewMaxAggregator, "temperature-max-aggregator", "sensor-data", "max-aggregation")
 
 	p, s := processors.NewWindowedAggregator(
 		func(s string, sd SensorData) time.Time { return sd.Timestamp }, // extract timestamp from message
@@ -72,16 +59,6 @@ func main() {
 	kstreams.RegisterStore(t, s, "my-agg-store")
 	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
 
-	// TODO: Windowed output key!
-	// kstreams.RegisterProcessor(t,
-	// 	processors.ForEach(
-	// 		func(k string, v float64) {
-	// 			fmt.Printf("Got Key=(%v), Value=(%v)\n", k, v)
-	// 		},
-	// 	),
-	// 	"print",
-	// 	"my-agg-processor",
-	// )
 	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serdes.JSONSerializer[sdk.WindowKey[string]](), serdes.JSONSerializer[float64](), "my-agg-processor")
 
 	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))

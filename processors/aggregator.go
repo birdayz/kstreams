@@ -33,7 +33,7 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	keySerde sdk.SerDe[Kin],
 	stateSerde sdk.SerDe[State],
 ) (
-	func() sdk.Processor[Kin, Vin, sdk.WindowKey[Kin], Vout],
+	sdk.ProcessorBuilder[Kin, Vin, sdk.WindowKey[Kin], Vout],
 	sdk.StoreBuilder,
 ) {
 	processorBuilder := func() sdk.Processor[Kin, Vin, sdk.WindowKey[Kin], Vout] {
