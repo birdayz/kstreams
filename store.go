@@ -1,18 +1,28 @@
 package kstreams
 
 import (
+	"context"
 	"errors"
 
 	"github.com/birdayz/kstreams/internal"
 	"github.com/birdayz/kstreams/sdk"
 )
 
+type Store interface {
+	Init() error
+	Flush(context.Context) error
+	Close() error
+}
+
 var (
 	ErrKeyNotFound = errors.New("store: key not found")
 )
 
-func RegisterStore(t *Topology, storeBuilder sdk.StoreBuilder, name string) {
-	internal.RegisterStore(t, storeBuilder, name)
+func RegisterStore(t *TopologyBuilder, storeBuilder sdk.StoreBuilder, name string) {
+	t.stores[name] = &TopologyStore{
+		Name:  name,
+		Build: storeBuilder,
+	}
 }
 
 func KVStore[K, V any](storeBuilder func(name string, p int32) (sdk.StoreBackend, error), keySerde sdk.SerDe[K], valueSerde sdk.SerDe[V]) func(name string, p int32) (sdk.Store, error) {
