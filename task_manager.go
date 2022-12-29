@@ -102,7 +102,7 @@ func (t *TaskManager) Assigned(assigned map[string][]int32) error {
 		for _, partition := range pg.partitions {
 			task, err := t.topology.CreateTask(pg.partitionGroup.sourceTopics, partition, t.client)
 			if err != nil {
-				return errors.New("failed to create task")
+				return fmt.Errorf("failed to create task: %w", err)
 			}
 			if err := task.Init(); err != nil {
 				return fmt.Errorf("failed to init task: %w", err)

@@ -39,6 +39,7 @@ func NewTask(topics []string, partition int32, rootNodes map[string]RecordProces
 
 func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 	for _, record := range records {
+		fmt.Println("zz")
 
 		p, ok := t.rootNodes[record.Topic]
 		if !ok {

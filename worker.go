@@ -150,12 +150,18 @@ func (r *Worker) handleRunning() {
 	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
 	r.log.V(2).Info("Polled Records")
 
+	fmt.Println("Polled")
+
 	if f.IsClientClosed() {
 		r.changeState(StateCloseRequested)
 		return
 	}
 
+	var fetches []kgo.FetchTopicPartition
 	for _, fetchError := range f.Errors() {
+		if fetchError.Err.Error() == "context deadline exceeded" {
+			continue
+		}
 		r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
 		if fetchError.Err != nil {
 			r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
@@ -164,13 +170,14 @@ func (r *Worker) handleRunning() {
 		}
 	}
 
-	var fetches []kgo.FetchTopicPartition
 	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
-		fetches = append(fetches, fetch)
+		if fetch.Err == nil {
+			fetches = append(fetches, fetch)
+		}
 	})
 
 	for _, fetch := range fetches {
-		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
+		r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 		if err != nil {
 			r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
@@ -233,6 +240,8 @@ func (r *Worker) handlePartitionsAssigned() {
 
 	if err := r.taskManager.Assigned(r.newlyAssigned); err != nil {
 		r.log.Error(err, "assigned failed")
+		r.changeState(StateCloseRequested)
+		return
 	}
 
 	r.newlyAssigned = nil

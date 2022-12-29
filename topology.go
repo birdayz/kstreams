@@ -16,6 +16,14 @@ type Topology struct {
 	sinks      map[string]*TopologySink
 }
 
+func (t *Topology) GetTopics() []string {
+	var res []string
+	for k := range t.sources {
+		res = append(res, k)
+	}
+	return res
+}
+
 func (t *Topology) partitionGroups() []*PartitionGroup {
 	var pgs []*PartitionGroup
 
@@ -96,6 +104,7 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 	var neededProcessors []string
 	for _, src := range srcs {
 		neededProcessors = append(neededProcessors, childNodes(t, src.Name, src.ChildNodeNames...)...)
+		fmt.Println(neededProcessors)
 	}
 	neededProcessors = slices.Compact(neededProcessors)
 
@@ -110,15 +119,56 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 		} else {
 			topoSink, ok := t.sinks[pr]
 			if !ok {
-				return nil, fmt.Errorf("could not find node: %s", pr)
+
+				_, ok := t.sources[pr]
+
+				if !ok {
+					return nil, fmt.Errorf("could not find node: %s", pr) // TODO !!!!!!!!!!!! can't find source node
+				}
+			} else {
+				sink := topoSink.Builder(client)
+				builtSinks[topoSink.Name] = sink
 			}
 
-			sink := topoSink.Builder(client)
-			builtSinks[topoSink.Name] = sink
 		}
 
 	}
 
+	builtSources := make(map[string]RecordProcessor)
+	for _, topic := range topics {
+		builtSources[topic] = t.sources[topic].Build()
+	}
+
+	for name, builtSource := range builtSources {
+		node := t.sources[name]
+
+		for _, childNodeName := range node.ChildNodeNames {
+			childNode, ok := t.processors[childNodeName]
+			if ok {
+				child, ok := builtProcessors[childNode.Name]
+				if !ok {
+					return nil, fmt.Errorf("processor [%s] not found", childNode.Name)
+				}
+				node.AddChildFunc(builtSource, child, childNode.Name)
+			} else {
+				childSink, ok := t.sinks[childNodeName]
+				if !ok {
+					return nil, fmt.Errorf("could not find child node %s", childNodeName)
+				}
+
+				child, ok := builtSinks[childSink.Name]
+				if !ok {
+					return nil, fmt.Errorf("could not find child node %s", childNodeName)
+				}
+
+				node.AddChildFunc(builtSource, child, childSink.Name)
+
+			}
+
+		}
+	}
+
+	// Link sub-processors
 	for k, builtProcessor := range builtProcessors {
 		node := t.processors[k]
 
@@ -148,17 +198,12 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 		}
 	}
 
-	ps := make(map[string]RecordProcessor)
-	for _, topic := range topics {
-		ps[topic] = builtProcessors[topic].(RecordProcessor)
-	}
-
 	processorStores := make(map[string][]string)
 	for _, proc := range neededProcessors {
 		processorStores[proc] = t.processors[proc].ChildNodeNames
 	}
 
-	task := NewTask(topics, partition, ps, stores, builtProcessors, builtSinks, processorStores)
+	task := NewTask(topics, partition, builtSources, stores, builtProcessors, builtSinks, processorStores)
 	return task, nil
 
 }
@@ -166,7 +211,7 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 // appendChildren gets a list of all node names of the given processor (?)
 func childNodes(t *Topology, p string, childNodeNames ...string) []string {
 	var res []string
-	res = append(res, p)
+	res = append(res, childNodeNames...)
 	for _, child := range childNodeNames {
 		childProcessor, ok := t.processors[child]
 		if ok {

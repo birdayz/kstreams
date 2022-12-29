@@ -1,6 +1,6 @@
 module github.com/birdayz/kstreams/stores/s3
 
-go 1.18
+go 1.19
 
 require (
 	github.com/alecthomas/assert/v2 v2.1.0
@@ -17,7 +17,7 @@ require (
 	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
-	github.com/klauspost/compress v1.15.1 // indirect
+	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/minio/md5-simd v1.1.0 // indirect
 	github.com/minio/sha256-simd v0.1.1 // indirect

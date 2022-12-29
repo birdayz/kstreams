@@ -19,14 +19,15 @@ type TopologyBuilder struct {
 	// Key = TopicNode
 	sources map[string]*TopologySource
 	sinks   map[string]*TopologySink
-
-	// processorToParent map[string]string
-
-	childNodes map[string][]string
 }
 
 func (tb *TopologyBuilder) Build() *Topology {
-	return &Topology{}
+	return &Topology{
+		sources:    tb.sources,
+		stores:     tb.stores,
+		processors: tb.processors,
+		sinks:      tb.sinks,
+	}
 }
 
 // PartitionGroup is a sub-graph of nodes that must be co-partitioned as they depend on each other.
@@ -107,7 +108,6 @@ func NewTopologyBuilder() *TopologyBuilder {
 		processors: map[string]*TopologyProcessor{},
 		stores:     map[string]*TopologyStore{},
 		sources:    map[string]*TopologySource{},
-		childNodes: map[string][]string{},
 		sinks:      map[string]*TopologySink{},
 	}
 }
@@ -137,11 +137,11 @@ type TopologySource struct {
 	AddChildFunc   func(parent any, child any, childName string) // TODO - possible to do w/o parent ?
 }
 
-func MustAddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) {
-	must(AddSource(t, name, topic, keyDeserializer, valueDeserializer))
+func MustRegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) {
+	must(RegisterSource(t, name, topic, keyDeserializer, valueDeserializer))
 }
 
-func AddSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) error {
+func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) error {
 	topoSource := &TopologySource{
 		Name: name,
 		Build: func() RecordProcessor {
@@ -180,11 +180,11 @@ func must(err error) {
 	}
 }
 
-func MustAddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) {
-	must(AddSink(t, name, topic, keySerializer, valueSerializer))
+func MustRegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) {
+	must(RegisterSink(t, name, topic, keySerializer, valueSerializer))
 }
 
-func AddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) error {
+func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) error {
 	topoSink := &TopologySink{
 		Name: name,
 		Builder: func(client *kgo.Client) Flusher {
@@ -198,11 +198,11 @@ func AddSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk
 	return nil
 }
 
-func MustAddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) {
-	must(AddProcessor(t, p, name, stores...))
+func MustRegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) {
+	must(RegisterProcessor(t, p, name, stores...))
 }
 
-func AddProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) error {
+func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) error {
 	topoProcessor := &TopologyProcessor{
 		Name: name,
 		Build: func() BaseProcessor {
@@ -254,41 +254,20 @@ func MustSetParent(t *TopologyBuilder, parent, child string) {
 
 func SetParent(t *TopologyBuilder, parent, child string) error {
 	parentNode, ok := t.processors[parent]
-	if !ok {
-		return ErrNodeNotFound
+	if ok {
+		parentNode.ChildNodeNames = append(parentNode.ChildNodeNames, child)
+		return nil
 	}
 
-	// TODO validate child exists.
-
-	parentNode.ChildNodeNames = append(parentNode.ChildNodeNames, child)
-
-	// t.processorToParent[child] = parent
-
-	_, ok = t.childNodes[parent]
-	if !ok {
-		t.childNodes[parent] = []string{}
+	source, ok := t.sources[parent]
+	if ok {
+		source.ChildNodeNames = append(source.ChildNodeNames, child)
+		return nil
 	}
 
-	t.childNodes[parent] = append(t.childNodes[parent], child)
-
-	return nil
-
+	return ErrNodeNotFound
 }
 
 var ErrNodeAlreadyExists = errors.New("node exists already")
 var ErrNodeNotFound = errors.New("node not found")
 var ErrInternal = errors.New("internal")
-
-func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) {
-	MustAddSource(t, name, topic, keyDeserializer, valueDeserializer)
-}
-
-func RegisterSink[K, V any](t *TopologyBuilder, name string, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V], parent string) {
-	MustAddSink(t, name, topic, keySerializer, valueSerializer)
-	MustSetParent(t, parent, name)
-}
-
-func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name, parent string, stores ...string) {
-	MustAddProcessor(t, p, name, stores...)
-	MustSetParent(t, parent, name)
-}
