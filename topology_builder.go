@@ -194,9 +194,7 @@ func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerialize
 	// t.processors[name] = topoProcessor
 	t.sinks[name] = topoSink
 
-	SetParent(t, parent, name)
-
-	return nil
+	return SetParent(t, parent, name)
 }
 
 func MustRegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, parent string, stores ...string) { // TODO: change to functional option for stores
