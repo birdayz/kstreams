@@ -10,8 +10,6 @@ require (
 	github.com/rs/zerolog v1.26.1
 )
 
-require github.com/go-logr/logr v1.2.3 // indirect
-
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -21,7 +19,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20221222183300-eb5e1039627d // indirect
 	github.com/cockroachdb/redact v1.0.8 // indirect
 	github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/go-logr/logr v1.2.4-0.20221203165057-4da5305ff29a // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
@@ -43,6 +41,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.3.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
+	k8s.io/klog/v2 v2.80.1 // indirect
 )
 
 replace github.com/birdayz/kstreams/stores/pebble => ../stores/pebble

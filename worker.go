@@ -146,11 +146,9 @@ func (r *Worker) handleRunning() {
 
 	r.cancelPollMtx.Unlock()
 
-	r.log.V(2).Info("Polling Records")
+	r.log.V(0).Info("Polling Records")
 	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
 	r.log.V(2).Info("Polled Records")
-
-	fmt.Println("Polled")
 
 	if f.IsClientClosed() {
 		r.changeState(StateCloseRequested)

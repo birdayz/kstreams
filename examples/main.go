@@ -17,12 +17,11 @@ import (
 var log *zerolog.Logger
 
 func init() {
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	zerologr.NameFieldName = "logger"
 	zerologr.NameSeparator = "/"
-	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.999Z07:00"}
-	zlog := zerolog.New(output).Level(zerolog.InfoLevel).With().Timestamp().Logger()
+	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.000Z07:00"}
+	zlog := zerolog.New(output).Level(zerolog.DebugLevel).With().Timestamp().Logger()
 	log = &zlog
 
 	go func() {
@@ -32,28 +31,26 @@ func init() {
 }
 
 func main() {
-	bldr := kstreams.NewTopologyBuilder()
+	builder := kstreams.NewTopologyBuilder()
 
-	kstreams.MustRegisterSource(bldr, "test", "test", serdes.StringDeserializer, serdes.StringDeserializer)
-	kstreams.MustRegisterProcessor(bldr,
+	kstreams.MustRegisterSource(builder, "test", "test", serdes.StringDeserializer, serdes.StringDeserializer)
+	kstreams.MustRegisterProcessor(builder,
 		func() kstreams.Processor[string, string, string, string] {
 			return &PrintlnProcessor{}
 		},
 		"printer",
 	)
-	if err := kstreams.SetParent(bldr, "test", "printer"); err != nil {
+	if err := kstreams.SetParent(builder, "test", "printer"); err != nil {
 		panic(err)
 	}
 
-	topology := bldr.Build()
+	topology := builder.Build()
 
-	_ = topology
 	app := kstreams.New(topology, "my-sample-app", kstreams.WithLogr(zerologr.New(log)))
 	go func() {
 		c := make(chan os.Signal)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
-		fmt.Println("Close")
 		app.Close()
 	}()
 
@@ -64,7 +61,6 @@ type PrintlnProcessor struct {
 }
 
 func (p *PrintlnProcessor) Init(stores ...kstreams.Store) error {
-	fmt.Println("inited")
 	return nil
 }
 

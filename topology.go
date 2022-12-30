@@ -104,7 +104,6 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 	var neededProcessors []string
 	for _, src := range srcs {
 		neededProcessors = append(neededProcessors, childNodes(t, src.Name, src.ChildNodeNames...)...)
-		fmt.Println(neededProcessors)
 	}
 	neededProcessors = slices.Compact(neededProcessors)
 
