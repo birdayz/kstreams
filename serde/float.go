@@ -1,10 +1,10 @@
-package serdes
+package serde
 
 import (
 	"encoding/binary"
 	"math"
 
-	"github.com/birdayz/kstreams/sdk"
+	"github.com/birdayz/kstreams"
 )
 
 var Float64Deserializer = func(data []byte) (float64, error) {
@@ -18,7 +18,7 @@ var Float64Serializer = func(data float64) ([]byte, error) {
 	return res, nil
 }
 
-var Float64 = sdk.SerDe[float64]{
+var Float64 = kstreams.SerDe[float64]{
 	Serializer:   Float64Serializer,
 	Deserializer: Float64Deserializer,
 }

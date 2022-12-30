@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serdes"
+	"github.com/birdayz/kstreams/serde"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 )
@@ -33,16 +33,14 @@ func init() {
 func main() {
 	builder := kstreams.NewTopologyBuilder()
 
-	kstreams.MustRegisterSource(builder, "test", "test", serdes.StringDeserializer, serdes.StringDeserializer)
+	kstreams.MustRegisterSource(builder, "test", "test", serde.StringDeserializer, serde.StringDeserializer)
 	kstreams.MustRegisterProcessor(builder,
 		func() kstreams.Processor[string, string, string, string] {
 			return &PrintlnProcessor{}
 		},
 		"printer",
+		"test",
 	)
-	if err := kstreams.SetParent(builder, "test", "printer"); err != nil {
-		panic(err)
-	}
 
 	topology := builder.Build()
 
@@ -54,7 +52,6 @@ func main() {
 		app.Close()
 	}()
 
-	fmt.Println(app.Run())
 }
 
 type PrintlnProcessor struct {

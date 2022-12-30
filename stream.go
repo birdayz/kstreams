@@ -57,7 +57,7 @@ func New(t *Topology, groupName string, opts ...Option) *App {
 		t:              t,
 		routines:       []*Worker{},
 		log:            logr.Discard(),
-		commitInterval: time.Second * 10,
+		commitInterval: time.Second * 60,
 	}
 
 	for _, opt := range opts {

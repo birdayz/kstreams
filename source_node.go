@@ -3,7 +3,6 @@ package kstreams
 import (
 	"context"
 
-	"github.com/birdayz/kstreams/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -14,8 +13,8 @@ type RecordProcessor interface {
 // SourceNode[K,V] receives kgo records, and forward these to all downstream
 // processors.
 type SourceNode[K any, V any] struct {
-	KeyDeserializer   sdk.Deserializer[K]
-	ValueDeserializer sdk.Deserializer[V]
+	KeyDeserializer   Deserializer[K]
+	ValueDeserializer Deserializer[V]
 
 	DownstreamProcessors []InputProcessor[K, V]
 }

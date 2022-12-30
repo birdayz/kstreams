@@ -1,4 +1,4 @@
-package sdk
+package kstreams
 
 type SerDe[T any] struct {
 	Serializer   Serializer[T]

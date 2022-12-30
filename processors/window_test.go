@@ -1,18 +1,19 @@
-package serdes
+package processors
 
 import (
 	"testing"
 	"time"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/birdayz/kstreams/sdk"
+	"github.com/birdayz/kstreams/serde"
 )
 
 func TestWindow(t *testing.T) {
-	serializer := WindowKeySerializer(StringSerializer)
-	deserializer := WindowKeyDeserializer(StringDeserializer)
 
-	input := sdk.WindowKey[string]{
+	serializer := WindowKeySerializer(serde.StringSerializer)
+	deserializer := WindowKeyDeserializer(serde.StringDeserializer)
+
+	input := WindowKey[string]{
 		Key:  "sensor-a",
 		Time: time.Now(),
 	}

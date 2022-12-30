@@ -3,20 +3,20 @@ package main
 import (
 	"fmt"
 
-	"github.com/birdayz/kstreams/sdk"
+	"github.com/birdayz/kstreams"
 )
 
-func NewMyProcessor() sdk.Processor[string, string, string, string] {
+func NewMyProcessor() kstreams.Processor[string, string, string, string] {
 	return &MyProcessor{}
 }
 
 type MyProcessor struct {
-	store sdk.KeyValueStore[string, string]
+	store *kstreams.KeyValueStore[string, string]
 }
 
-func (p *MyProcessor) Init(stores ...sdk.Store) error {
+func (p *MyProcessor) Init(stores ...kstreams.Store) error {
 	if len(stores) > 0 {
-		p.store = stores[0].(sdk.KeyValueStore[string, string])
+		p.store = stores[0].(*kstreams.KeyValueStore[string, string])
 	}
 	return nil
 }
@@ -25,7 +25,7 @@ func (p *MyProcessor) Close() error {
 	return nil
 }
 
-func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v string) error {
+func (p *MyProcessor) Process(ctx kstreams.Context[string, string], k string, v string) error {
 	old, err := p.store.Get(k)
 	if err == nil {
 		fmt.Println("Found old value!", k, old)
@@ -38,13 +38,13 @@ func (p *MyProcessor) Process(ctx sdk.Context[string, string], k string, v strin
 
 type MyProcessor2 struct{}
 
-func (p *MyProcessor2) Process(ctx sdk.Context[string, string], k string, v string) error {
+func (p *MyProcessor2) Process(ctx kstreams.Context[string, string], k string, v string) error {
 	fmt.Printf("Just printing out the data. Key=%s, Value=%s\n", k, v)
 	ctx.Forward(k, v)
 	return nil
 }
 
-func (p *MyProcessor2) Init(stores ...sdk.Store) error {
+func (p *MyProcessor2) Init(stores ...kstreams.Store) error {
 	return nil
 }
 

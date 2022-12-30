@@ -3,7 +3,6 @@ package kstreams
 import (
 	"errors"
 
-	"github.com/birdayz/kstreams/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"golang.org/x/exp/slices"
 )
@@ -114,7 +113,7 @@ func NewTopologyBuilder() *TopologyBuilder {
 
 type TopologyStore struct {
 	Name  string
-	Build sdk.StoreBuilder
+	Build StoreBuilder
 }
 
 type TopologySink struct {
@@ -137,11 +136,11 @@ type TopologySource struct {
 	AddChildFunc   func(parent any, child any, childName string) // TODO - possible to do w/o parent ?
 }
 
-func MustRegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) {
+func MustRegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) {
 	must(RegisterSource(t, name, topic, keyDeserializer, valueDeserializer))
 }
 
-func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer sdk.Deserializer[K], valueDeserializer sdk.Deserializer[V]) error {
+func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) error {
 	topoSource := &TopologySource{
 		Name: name,
 		Build: func() RecordProcessor {
@@ -180,11 +179,11 @@ func must(err error) {
 	}
 }
 
-func MustRegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) {
-	must(RegisterSink(t, name, topic, keySerializer, valueSerializer))
+func MustRegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer Serializer[K], valueSerializer Serializer[V], parent string) {
+	must(RegisterSink(t, name, topic, keySerializer, valueSerializer, parent))
 }
 
-func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) error {
+func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer Serializer[K], valueSerializer Serializer[V], parent string) error {
 	topoSink := &TopologySink{
 		Name: name,
 		Builder: func(client *kgo.Client) Flusher {
@@ -195,14 +194,16 @@ func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerialize
 	// t.processors[name] = topoProcessor
 	t.sinks[name] = topoSink
 
+	SetParent(t, parent, name)
+
 	return nil
 }
 
-func MustRegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) {
-	must(RegisterProcessor(t, p, name, stores...))
+func MustRegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, parent string, stores ...string) { // TODO: change to functional option for stores
+	must(RegisterProcessor(t, p, name, parent, stores...))
 }
 
-func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, stores ...string) error {
+func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, parent string, stores ...string) error {
 	topoProcessor := &TopologyProcessor{
 		Name: name,
 		Build: func() BaseProcessor {
@@ -245,7 +246,7 @@ func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Processor
 			return errors.New("store not found")
 		}
 	}
-	return nil
+	return SetParent(t, parent, name)
 }
 
 func MustSetParent(t *TopologyBuilder, parent, child string) {

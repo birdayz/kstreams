@@ -25,6 +25,7 @@ type Task struct {
 }
 
 func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores map[string]Store, processors map[string]BaseProcessor, sinks map[string]Flusher, processorToStore map[string][]string) *Task {
+	// spew.Dump(processorToStore)
 	return &Task{
 		rootNodes:          rootNodes,
 		stores:             stores,

@@ -2,6 +2,7 @@ package kstreams
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -155,50 +156,56 @@ func (r *Worker) handleRunning() {
 		return
 	}
 
-	var fetches []kgo.FetchTopicPartition
-	for _, fetchError := range f.Errors() {
-		if fetchError.Err.Error() == "context deadline exceeded" {
-			continue
-		}
-		r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
-		if fetchError.Err != nil {
-			r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
-			r.changeState(StateCloseRequested)
-			return
-		}
+	if errors.Is(f.Err(), context.Canceled) {
+		return
 	}
 
-	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
-		if fetch.Err == nil {
-			fetches = append(fetches, fetch)
-		}
-	})
-
-	for _, fetch := range fetches {
-		r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
-		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
-		if err != nil {
-			r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
-			r.changeState(StateCloseRequested)
-			return
-		}
-
-		count := 0
-
-		for _, record := range fetch.Records {
-			count++
-
-			recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
-			err := task.Process(recordCtx, record)
-			cancel()
-			if err != nil {
-				r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
+	if !errors.Is(f.Err(), context.DeadlineExceeded) {
+		var fetches []kgo.FetchTopicPartition
+		for _, fetchError := range f.Errors() {
+			if errors.Is(fetchError.Err, context.DeadlineExceeded) {
+				continue
+			}
+			r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
+			if fetchError.Err != nil {
+				r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
 				r.changeState(StateCloseRequested)
-				r.err = err
 				return
 			}
 		}
-		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
+
+		f.EachPartition(func(fetch kgo.FetchTopicPartition) {
+			if fetch.Err == nil {
+				fetches = append(fetches, fetch)
+			}
+		})
+
+		for _, fetch := range fetches {
+			r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
+			task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
+			if err != nil {
+				r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
+				r.changeState(StateCloseRequested)
+				return
+			}
+
+			count := 0
+
+			for _, record := range fetch.Records {
+				count++
+
+				recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
+				err := task.Process(recordCtx, record)
+				cancel()
+				if err != nil {
+					r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
+					r.changeState(StateCloseRequested)
+					r.err = err
+					return
+				}
+			}
+			r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
+		}
 	}
 
 	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)

@@ -98,6 +98,9 @@ func (t *TaskManager) Assigned(assigned map[string][]int32) error {
 		return err
 	}
 
+	// ProcessorNames nil, partitions nil? bug in parent-child relation probably
+	// sollte nur 1 PG sein! co-partitioning incorrect. TODO guarantee each store is inited only once ;)
+
 	for _, pg := range matchingPGs {
 		for _, partition := range pg.partitions {
 			task, err := t.topology.CreateTask(pg.partitionGroup.sourceTopics, partition, t.client)

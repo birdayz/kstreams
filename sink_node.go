@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/birdayz/kstreams/sdk"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 var _ = InputProcessor[any, any](&SinkNode[any, any]{})
 
 type SinkNode[K any, V any] struct {
-	KeySerializer   sdk.Serializer[K]
-	ValueSerializer sdk.Serializer[V]
+	KeySerializer   Serializer[K]
+	ValueSerializer Serializer[V]
 
 	client *kgo.Client
 	topic  string
@@ -29,7 +28,7 @@ type produceResult struct {
 	err    error
 }
 
-func NewSinkNode[K, V any](client *kgo.Client, topic string, keySerializer sdk.Serializer[K], valueSerializer sdk.Serializer[V]) *SinkNode[K, V] {
+func NewSinkNode[K, V any](client *kgo.Client, topic string, keySerializer Serializer[K], valueSerializer Serializer[V]) *SinkNode[K, V] {
 	return &SinkNode[K, V]{
 		client:          client,
 		topic:           topic,

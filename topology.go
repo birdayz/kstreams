@@ -63,9 +63,9 @@ func (t *Topology) partitionGroups() []*PartitionGroup {
 	return pgs
 }
 
-func (t *Topology) findAllProcessors(processor string) []string {
+func (t *Topology) findAllProcessors(source string) []string {
 	var res []string
-	if proc, ok := t.processors[processor]; ok {
+	if proc, ok := t.sources[source]; ok {
 		children := proc.ChildNodeNames
 		for _, child := range children {
 			// Ignore sinks
@@ -101,6 +101,7 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 
 	builtProcessors := map[string]BaseProcessor{}
 
+	// This includes sink nodes. Should be refactored to not include sink nodes, so we treat these completely separately.
 	var neededProcessors []string
 	for _, src := range srcs {
 		neededProcessors = append(neededProcessors, childNodes(t, src.Name, src.ChildNodeNames...)...)
@@ -198,8 +199,12 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 	}
 
 	processorStores := make(map[string][]string)
-	for _, proc := range neededProcessors {
-		processorStores[proc] = t.processors[proc].ChildNodeNames
+	for _, processorName := range neededProcessors {
+		// processorStores[processorName] = t.processors[processorName].ChildNodeNames
+		proc, ok := t.processors[processorName]
+		if ok {
+			processorStores[processorName] = proc.StoreNames
+		}
 	}
 
 	task := NewTask(topics, partition, builtSources, stores, builtProcessors, builtSinks, processorStores)
