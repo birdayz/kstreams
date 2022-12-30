@@ -37,6 +37,7 @@ func (s *s3Store) Set(k, v []byte) error {
 	if err != nil {
 		return err
 	}
+	_ = info
 	return nil
 }
 

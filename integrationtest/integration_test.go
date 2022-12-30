@@ -8,8 +8,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/sdk"
-	"github.com/birdayz/kstreams/serdes"
+	"github.com/birdayz/kstreams/serde"
 	"github.com/docker/go-connections/nat"
 	"github.com/go-logr/stdr"
 	"github.com/testcontainers/testcontainers-go"
@@ -124,17 +123,17 @@ func TestWithSimpleProcessor(t *testing.T) {
 			_, err = acl.CreateTopics(context.Background(), 10, 1, map[string]*string{}, "source")
 			assert.NoError(t, err)
 
-			topo := kstreams.NewTopology()
-			kstreams.RegisterSource(topo, "source", "source", serdes.StringDeserializer, serdes.StringDeserializer)
+			topo := kstreams.NewTopologyBuilder()
+			kstreams.RegisterSource(topo, "source", "source", serde.StringDeserializer, serde.StringDeserializer)
 
 			out := make(chan [2]string)
-			kstreams.RegisterProcessor(topo, func() sdk.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
 				return &SpyProcessor{
 					out: out,
 				}
 			}, "my-processor", "source")
 
-			app := kstreams.New(topo, "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLogr(stdr.New(nil)))
+			app := kstreams.New(topo.Build(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLogr(stdr.New(nil)))
 			go func() {
 				err := app.Run()
 				assert.NoError(t, err)

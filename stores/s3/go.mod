@@ -5,7 +5,6 @@ go 1.19
 require (
 	github.com/alecthomas/assert/v2 v2.1.0
 	github.com/birdayz/kstreams v0.0.0-20220407000846-92fbed7c989e
-	github.com/davecgh/go-spew v1.1.1
 	github.com/minio/minio-go/v7 v7.0.27
 )
 
