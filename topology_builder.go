@@ -20,7 +20,7 @@ type TopologyBuilder struct {
 }
 
 func (tb *TopologyBuilder) Build() (*Topology, error) {
-	// Validate for cycles
+	// TODO Validate for cycles, build partition group once,...
 	return &Topology{
 		sources:    tb.sources,
 		stores:     tb.stores,
