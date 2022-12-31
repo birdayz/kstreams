@@ -133,7 +133,7 @@ func TestWithSimpleProcessor(t *testing.T) {
 				}
 			}, "my-processor", "source")
 
-			app := kstreams.New(topo.Build(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLogr(stdr.New(nil)))
+			app := kstreams.New(topo.MustBuild(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLogr(stdr.New(nil)))
 			go func() {
 				err := app.Run()
 				assert.NoError(t, err)

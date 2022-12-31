@@ -47,7 +47,7 @@ func main() {
 	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
 	kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serde.StringSerializer, serde.StringSerializer, "processor-2")
 
-	app := kstreams.New(t.Build(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
+	app := kstreams.New(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
 	go func() {
 		c := make(chan os.Signal)

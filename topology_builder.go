@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/twmb/franz-go/pkg/kgo"
-	"golang.org/x/exp/slices"
 )
 
 type Nexter[K, V any] interface {
@@ -20,20 +19,22 @@ type TopologyBuilder struct {
 	sinks   map[string]*TopologySink
 }
 
-func (tb *TopologyBuilder) Build() *Topology {
+func (tb *TopologyBuilder) Build() (*Topology, error) {
+	// Validate for cycles
 	return &Topology{
 		sources:    tb.sources,
 		stores:     tb.stores,
 		processors: tb.processors,
 		sinks:      tb.sinks,
-	}
+	}, nil
 }
 
-// PartitionGroup is a sub-graph of nodes that must be co-partitioned as they depend on each other.
-type PartitionGroup struct {
-	sourceTopics   []string
-	processorNames []string
-	storeNames     []string
+func (tb *TopologyBuilder) MustBuild() *Topology {
+	topology, err := tb.Build()
+	if err != nil {
+		panic(err)
+	}
+	return topology
 }
 
 // Contains reports whether v is present in s.
@@ -47,59 +48,6 @@ func ContainsAny[E comparable](s []E, v []E) bool {
 	}
 
 	return false
-}
-
-func mergeIteration(pgs []*PartitionGroup) (altered []*PartitionGroup, done bool) {
-	var a, b int
-
-	var dirty bool
-outer:
-	for i, pg := range pgs {
-
-		for d, otherPg := range pgs {
-			if i == d {
-				continue
-			}
-			if ContainsAny(otherPg.sourceTopics, pg.sourceTopics) || ContainsAny(otherPg.processorNames, pg.processorNames) || ContainsAny(otherPg.storeNames, pg.storeNames) {
-				a = i
-				b = d
-				dirty = true
-				break outer
-			}
-		}
-	}
-
-	// Clean, return
-	if !dirty {
-		return pgs, true
-	}
-
-	// "Sort" so it's deterministic.
-	if a < b {
-		a, b = b, a
-	}
-
-	// Merge b into a.
-	pgA := pgs[a]
-	pgB := pgs[b]
-
-	pgA.sourceTopics = slices.Compact(append(pgA.sourceTopics, pgB.sourceTopics...))
-	pgA.processorNames = slices.Compact(append(pgA.processorNames, pgB.processorNames...))
-	pgA.storeNames = slices.Compact(append(pgA.storeNames, pgB.storeNames...))
-
-	pgs = slices.Delete(pgs, b, b+1)
-
-	return pgs, false
-}
-
-// If there is any overlap in the input partition groups, they are merged together.
-func mergePartitionGroups(pgs []*PartitionGroup) []*PartitionGroup {
-	finished := false
-	for !finished {
-		pgs, finished = mergeIteration(pgs)
-	}
-
-	return pgs
 }
 
 func NewTopologyBuilder() *TopologyBuilder {

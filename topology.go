@@ -24,6 +24,13 @@ func (t *Topology) GetTopics() []string {
 	return res
 }
 
+// PartitionGroup is a sub-graph of nodes that must be co-partitioned as they depend on each other.
+type PartitionGroup struct {
+	sourceTopics   []string
+	processorNames []string
+	storeNames     []string
+}
+
 func (t *Topology) partitionGroups() []*PartitionGroup {
 	var pgs []*PartitionGroup
 
@@ -119,19 +126,15 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 		} else {
 			topoSink, ok := t.sinks[pr]
 			if !ok {
-
 				_, ok := t.sources[pr]
-
 				if !ok {
-					return nil, fmt.Errorf("could not find node: %s", pr) // TODO !!!!!!!!!!!! can't find source node
+					return nil, fmt.Errorf("could not find node: %s", pr)
 				}
 			} else {
 				sink := topoSink.Builder(client)
 				builtSinks[topoSink.Name] = sink
 			}
-
 		}
-
 	}
 
 	builtSources := make(map[string]RecordProcessor)
@@ -234,4 +237,57 @@ func childNodes(t *Topology, p string, childNodeNames ...string) []string {
 
 	}
 	return res
+}
+
+func mergeIteration(pgs []*PartitionGroup) (altered []*PartitionGroup, done bool) {
+	var a, b int
+
+	var dirty bool
+outer:
+	for i, pg := range pgs {
+
+		for d, otherPg := range pgs {
+			if i == d {
+				continue
+			}
+			if ContainsAny(otherPg.sourceTopics, pg.sourceTopics) || ContainsAny(otherPg.processorNames, pg.processorNames) || ContainsAny(otherPg.storeNames, pg.storeNames) {
+				a = i
+				b = d
+				dirty = true
+				break outer
+			}
+		}
+	}
+
+	// Clean, return
+	if !dirty {
+		return pgs, true
+	}
+
+	// "Sort" so it's deterministic.
+	if a < b {
+		a, b = b, a
+	}
+
+	// Merge b into a.
+	pgA := pgs[a]
+	pgB := pgs[b]
+
+	pgA.sourceTopics = slices.Compact(append(pgA.sourceTopics, pgB.sourceTopics...))
+	pgA.processorNames = slices.Compact(append(pgA.processorNames, pgB.processorNames...))
+	pgA.storeNames = slices.Compact(append(pgA.storeNames, pgB.storeNames...))
+
+	pgs = slices.Delete(pgs, b, b+1)
+
+	return pgs, false
+}
+
+// If there is any overlap in the input partition groups, they are merged together.
+func mergePartitionGroups(pgs []*PartitionGroup) []*PartitionGroup {
+	finished := false
+	for !finished {
+		pgs, finished = mergeIteration(pgs)
+	}
+
+	return pgs
 }

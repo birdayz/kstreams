@@ -42,7 +42,7 @@ func main() {
 		"test",
 	)
 
-	topology := builder.Build()
+	topology := builder.MustBuild()
 
 	app := kstreams.New(topology, "my-sample-app", kstreams.WithLogr(zerologr.New(log)))
 	go func() {
