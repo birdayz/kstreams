@@ -1,12 +1,10 @@
-package internal
+package kstreams
 
-import (
-	"context"
-)
+import "context"
 
 type ProcessorContext[Kout any, Vout any] struct {
 	context.Context
-	outputs      map[string]GenericProcessor[Kout, Vout]
+	outputs      map[string]InputProcessor[Kout, Vout]
 	outputErrors []error
 }
 

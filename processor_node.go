@@ -1,25 +1,22 @@
-package internal
+package kstreams
 
 import (
 	"context"
 
-	"github.com/birdayz/kstreams/sdk"
 	"github.com/hashicorp/go-multierror"
 )
 
-type GenericProcessor[K any, V any] interface {
+// InputProcessor is a partial interface covering only the generic input K/V,
+// without requiring the caller to know the generic types of the output.
+type InputProcessor[K any, V any] interface {
 	Process(context.Context, K, V) error
 }
 
-type Nexter[K, V any] interface {
-	AddNext(GenericProcessor[K, V])
-}
-
-var _ = GenericProcessor[any, any](&ProcessorNode[any, any, any, any]{})
+var _ = InputProcessor[any, any](&ProcessorNode[any, any, any, any]{})
 
 type ProcessorNode[Kin any, Vin any, Kout any, Vout any] struct {
-	userProcessor sdk.Processor[Kin, Vin, Kout, Vout]
-	outputs       map[string]GenericProcessor[Kout, Vout]
+	userProcessor Processor[Kin, Vin, Kout, Vout]
+	outputs       map[string]InputProcessor[Kout, Vout]
 }
 
 func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Process(ctx context.Context, k Kin, v Vin) error {
@@ -41,7 +38,7 @@ func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Process(ctx context.Context, k Kin
 	return errs.ErrorOrNil()
 }
 
-func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Init(stores ...sdk.Store) error {
+func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Init(stores ...Store) error {
 	return p.userProcessor.Init(stores...)
 }
 

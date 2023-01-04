@@ -8,8 +8,7 @@ import (
 
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/processors"
-	"github.com/birdayz/kstreams/sdk"
-	"github.com/birdayz/kstreams/serdes"
+	"github.com/birdayz/kstreams/serde"
 	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
@@ -36,12 +35,12 @@ func init() {
 }
 
 func main() {
-	t := kstreams.NewTopology()
+	t := kstreams.NewTopologyBuilder()
 
 	// Use pebble for all stores
 	storeBackend := pebble.NewStoreBackend("/tmp/kstreams")
 
-	kstreams.RegisterSource(t, "sensor-data", "sensor-data", serdes.StringDeserializer, serdes.JSONDeserializer[SensorData]())
+	kstreams.RegisterSource(t, "sensor-data", "sensor-data", serde.StringDeserializer, serde.JSONDeserializer[SensorData]())
 
 	p, s := processors.NewWindowedAggregator(
 		func(s string, sd SensorData) time.Time { return sd.Timestamp }, // extract timestamp from message
@@ -53,15 +52,15 @@ func main() {
 		},
 		func(ws WindowState) float64 { return float64(ws.Count) }, // finalize result
 		storeBackend,
-		serdes.String,
-		serdes.JSON[WindowState](), // store aggregation state as JSON. We could use something much more efficient, like apache arrow
+		serde.String,
+		serde.JSON[WindowState](), // store aggregation state as JSON. We could use something much more efficient, like apache arrow
 	)
 	kstreams.RegisterStore(t, s, "my-agg-store")
 	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
 
-	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serdes.JSONSerializer[sdk.WindowKey[string]](), serdes.JSONSerializer[float64](), "my-agg-processor")
+	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serde.JSONSerializer[processors.WindowKey[string]](), serde.JSONSerializer[float64](), "my-agg-processor")
 
-	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
+	app := kstreams.New(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
 	go func() {
 		c := make(chan os.Signal)

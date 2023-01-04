@@ -5,8 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/birdayz/kstreams/sdk"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/birdayz/kstreams"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -38,7 +37,7 @@ func (s *s3Store) Set(k, v []byte) error {
 	if err != nil {
 		return err
 	}
-	spew.Dump(info)
+	_ = info
 	return nil
 }
 
@@ -51,9 +50,9 @@ func (s *s3Store) objectName(key string) string {
 	return fmt.Sprintf("%s/%s", s.prefix, key)
 }
 
-func NewStoreBackend() func(name string, p int32) (sdk.StoreBackend, error) {
+func NewStoreBackend() func(name string, p int32) (kstreams.StoreBackend, error) {
 	// TODO: will need topic as well
-	return func(name string, p int32) (sdk.StoreBackend, error) {
+	return func(name string, p int32) (kstreams.StoreBackend, error) {
 		return newS3Store(name, uint32(p))
 	}
 }

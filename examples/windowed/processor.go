@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/birdayz/kstreams/sdk"
+	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/processors"
 )
 
 type WindowState struct {
@@ -12,17 +13,17 @@ type WindowState struct {
 	Values []float64
 }
 
-func NewAverageAggregator() sdk.Processor[string, SensorData, string, float64] {
+func NewAverageAggregator() kstreams.Processor[string, SensorData, string, float64] {
 	return &AvgAggregator{}
 }
 
 type AvgAggregator struct {
-	store sdk.WindowedKeyValueStore[string, WindowState]
+	store *processors.WindowedKeyValueStore[string, WindowState]
 }
 
-func (p *AvgAggregator) Init(stores ...sdk.Store) error {
+func (p *AvgAggregator) Init(stores ...kstreams.Store) error {
 	if len(stores) > 0 {
-		p.store = stores[0].(sdk.WindowedKeyValueStore[string, WindowState])
+		p.store = stores[0].(*processors.WindowedKeyValueStore[string, WindowState])
 	}
 	return nil
 }
@@ -32,7 +33,7 @@ func (p *AvgAggregator) Close() error {
 }
 
 // TODO make output key WindowKey[string], and generalize this
-func (p *AvgAggregator) Process(ctx sdk.Context[string, float64], k string, v SensorData) error {
+func (p *AvgAggregator) Process(ctx kstreams.Context[string, float64], k string, v SensorData) error {
 	// Use start of hour as timestamp
 	windowStart := v.Timestamp.Truncate(time.Hour)
 	state, err := p.store.Get(k, windowStart)

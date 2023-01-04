@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/sdk"
 	"github.com/cockroachdb/pebble"
 )
 
@@ -53,7 +52,7 @@ func (s *pebbleStore) Get(k []byte) ([]byte, error) {
 	return res, nil
 }
 
-func newStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error) {
+func newStore(stateDir, name string, partition uint32) (kstreams.StoreBackend, error) {
 	if stateDir == "" {
 		stateDir = "/tmp/kstreams"
 	}
@@ -66,10 +65,10 @@ func newStore(stateDir, name string, partition uint32) (sdk.StoreBackend, error)
 	return &pebbleStore{db: db}, nil
 }
 
-func NewStoreBackend(stateDir string) func(name string, p int32) (sdk.StoreBackend, error) {
-	return func(name string, p int32) (sdk.StoreBackend, error) {
+func NewStoreBackend(stateDir string) func(name string, p int32) (kstreams.StoreBackend, error) {
+	return func(name string, p int32) (kstreams.StoreBackend, error) {
 		return newStore(stateDir, name, uint32(p))
 	}
 }
 
-var _ = sdk.StoreBackend(&pebbleStore{})
+var _ = kstreams.StoreBackend(&pebbleStore{})

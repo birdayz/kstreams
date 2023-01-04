@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/birdayz/kstreams/internal"
 	"github.com/go-logr/logr"
 	"golang.org/x/sync/errgroup"
 )
 
-type Option func(*Streamz)
+type Option func(*App)
 
-type Streamz struct {
+type App struct {
 	numRoutines int
 	brokers     []string
 	groupName   string
-	t           *internal.TopologyBuilder // change to topology
+	t           *Topology
 
-	routines []*internal.Worker
+	routines []*Worker
 
 	log logr.Logger
 
@@ -27,38 +26,38 @@ type Streamz struct {
 }
 
 var WithWorkersCount = func(n int) Option {
-	return func(s *Streamz) {
+	return func(s *App) {
 		s.numRoutines = n
 	}
 }
 
 var WithLogr = func(log logr.Logger) Option {
-	return func(s *Streamz) {
+	return func(s *App) {
 		s.log = log
 	}
 }
 
 var WithBrokers = func(brokers []string) Option {
-	return func(s *Streamz) {
+	return func(s *App) {
 		s.brokers = brokers
 	}
 }
 
 var WithCommitInterval = func(commitInterval time.Duration) Option {
-	return func(s *Streamz) {
+	return func(s *App) {
 		s.commitInterval = commitInterval
 	}
 }
 
-func New(t *internal.TopologyBuilder, groupName string, opts ...Option) *Streamz {
-	s := &Streamz{
+func New(t *Topology, groupName string, opts ...Option) *App {
+	s := &App{
 		numRoutines:    1,
 		brokers:        []string{"localhost:9092"},
 		groupName:      groupName,
 		t:              t,
-		routines:       []*internal.Worker{},
+		routines:       []*Worker{},
 		log:            logr.Discard(),
-		commitInterval: time.Second * 10,
+		commitInterval: time.Second * 60,
 	}
 
 	for _, opt := range opts {
@@ -70,11 +69,17 @@ func New(t *internal.TopologyBuilder, groupName string, opts ...Option) *Streamz
 
 // Run blocks until it's exited, either by an error or by a graceful shutdown
 // triggered by a call to Close.
-func (c *Streamz) Run() error {
+func (c *App) Run() error {
 	grp := errgroup.Group{}
 	c.eg = &grp
 	for i := 0; i < c.numRoutines; i++ {
-		routine, err := internal.NewWorker(c.log.WithName("worker"), fmt.Sprintf("routine-%d", i), c.t, c.groupName, c.brokers, c.commitInterval)
+		routine, err := NewWorker(
+			c.log.WithName("worker"),
+			fmt.Sprintf("routine-%d", i),
+			c.t,
+			c.groupName,
+			c.brokers,
+			c.commitInterval)
 		if err != nil {
 			return err
 		}
@@ -84,9 +89,9 @@ func (c *Streamz) Run() error {
 	return grp.Wait()
 }
 
-func (c *Streamz) Close() error {
+func (c *App) Close() error {
 	for _, routine := range c.routines {
-		go func(routine *internal.Worker) {
+		go func(routine *Worker) {
 			routine.Close()
 		}(routine)
 	}

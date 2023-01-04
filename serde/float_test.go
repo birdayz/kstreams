@@ -1,4 +1,4 @@
-package serdes
+package serde
 
 import (
 	"testing"

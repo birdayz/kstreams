@@ -1,4 +1,4 @@
-package internal
+package kstreams
 
 import (
 	"fmt"
@@ -127,7 +127,8 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 		}
 	}
 
-	plan := wb.inner.Balance(strippedMap)
+	plan, err := wb.inner.(kgo.GroupMemberBalancerOrError).BalanceOrError(strippedMap)
+	_ = err
 
 	balancePlan, ok := plan.(*kgo.BalancePlan)
 	if !ok {

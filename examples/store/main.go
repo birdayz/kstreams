@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serdes"
+	"github.com/birdayz/kstreams/serde"
 	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
@@ -34,20 +34,20 @@ func init() {
 }
 
 func main() {
-	t := kstreams.NewTopology()
+	t := kstreams.NewTopologyBuilder()
 
 	kstreams.RegisterStore(t,
 		kstreams.KVStore(
-			pebble.NewStoreBackend("/tmp/kstreams"), serdes.String, serdes.String,
+			pebble.NewStoreBackend("/tmp/kstreams"), serde.String, serde.String,
 		),
 		"my-store")
-	kstreams.RegisterSource(t, "my-topic", "my-topic", serdes.StringDeserializer, serdes.StringDeserializer)
-	kstreams.RegisterSource(t, "my-second-topic", "my-second-topic", serdes.StringDeserializer, serdes.StringDeserializer)
+	kstreams.RegisterSource(t, "my-topic", "my-topic", serde.StringDeserializer, serde.StringDeserializer)
+	kstreams.RegisterSource(t, "my-second-topic", "my-second-topic", serde.StringDeserializer, serde.StringDeserializer)
 	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
 	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
-	kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serdes.StringSerializer, serdes.StringSerializer, "processor-2")
+	kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serde.StringSerializer, serde.StringSerializer, "processor-2")
 
-	app := kstreams.New(t, "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
+	app := kstreams.New(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
 	go func() {
 		c := make(chan os.Signal)

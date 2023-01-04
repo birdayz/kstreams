@@ -1,7 +1,8 @@
-package internal
+package kstreams
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -28,7 +29,7 @@ type Worker struct {
 	log         logr.Logger
 	group       string
 
-	t *TopologyBuilder
+	t *Topology
 
 	state RoutineState
 
@@ -62,7 +63,7 @@ type AssignedOrRevoked struct {
 }
 
 // Config
-func NewWorker(log logr.Logger, name string, t *TopologyBuilder, group string, brokers []string, commitInterval time.Duration) (*Worker, error) {
+func NewWorker(log logr.Logger, name string, t *Topology, group string, brokers []string, commitInterval time.Duration) (*Worker, error) {
 	tm := &TaskManager{
 		tasks:    []*Task{},
 		log:      log,
@@ -146,7 +147,7 @@ func (r *Worker) handleRunning() {
 
 	r.cancelPollMtx.Unlock()
 
-	r.log.V(2).Info("Polling Records")
+	r.log.V(0).Info("Polling Records")
 	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
 	r.log.V(2).Info("Polled Records")
 
@@ -155,45 +156,56 @@ func (r *Worker) handleRunning() {
 		return
 	}
 
-	for _, fetchError := range f.Errors() {
-		r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
-		if fetchError.Err != nil {
-			r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
-			r.changeState(StateCloseRequested)
-			return
-		}
+	if errors.Is(f.Err(), context.Canceled) {
+		return
 	}
 
-	var fetches []kgo.FetchTopicPartition
-	f.EachPartition(func(fetch kgo.FetchTopicPartition) {
-		fetches = append(fetches, fetch)
-	})
-
-	for _, fetch := range fetches {
-		r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
-		task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
-		if err != nil {
-			r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
-			r.changeState(StateCloseRequested)
-			return
-		}
-
-		count := 0
-
-		for _, record := range fetch.Records {
-			count++
-
-			recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
-			err := task.Process(recordCtx, record)
-			cancel()
-			if err != nil {
-				r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
+	if !errors.Is(f.Err(), context.DeadlineExceeded) {
+		var fetches []kgo.FetchTopicPartition
+		for _, fetchError := range f.Errors() {
+			if errors.Is(fetchError.Err, context.DeadlineExceeded) {
+				continue
+			}
+			r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
+			if fetchError.Err != nil {
+				r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
 				r.changeState(StateCloseRequested)
-				r.err = err
 				return
 			}
 		}
-		r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
+
+		f.EachPartition(func(fetch kgo.FetchTopicPartition) {
+			if fetch.Err == nil {
+				fetches = append(fetches, fetch)
+			}
+		})
+
+		for _, fetch := range fetches {
+			r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
+			task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
+			if err != nil {
+				r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
+				r.changeState(StateCloseRequested)
+				return
+			}
+
+			count := 0
+
+			for _, record := range fetch.Records {
+				count++
+
+				recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
+				err := task.Process(recordCtx, record)
+				cancel()
+				if err != nil {
+					r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
+					r.changeState(StateCloseRequested)
+					r.err = err
+					return
+				}
+			}
+			r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
+		}
 	}
 
 	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -233,6 +245,8 @@ func (r *Worker) handlePartitionsAssigned() {
 
 	if err := r.taskManager.Assigned(r.newlyAssigned); err != nil {
 		r.log.Error(err, "assigned failed")
+		r.changeState(StateCloseRequested)
+		return
 	}
 
 	r.newlyAssigned = nil
