@@ -209,8 +209,6 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 		}
 	}
 
-	fmt.Println(processorStores)
-
 	task := NewTask(topics, partition, builtSources, stores, builtProcessors, builtSinks, processorStores)
 	return task, nil
 
