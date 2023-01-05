@@ -18,13 +18,13 @@ type Task struct {
 
 	committableOffsets map[string]int64 // Topic => offset
 
-	processors map[string]BaseProcessor
+	processors map[string]Node
 
 	sinks              map[string]Flusher
 	processorsToStores map[string][]string
 }
 
-func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores map[string]Store, processors map[string]BaseProcessor, sinks map[string]Flusher, processorToStore map[string][]string) *Task {
+func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores map[string]Store, processors map[string]Node, sinks map[string]Flusher, processorToStore map[string][]string) *Task {
 	// spew.Dump(processorToStore)
 	return &Task{
 		rootNodes:          rootNodes,
@@ -57,13 +57,8 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 func (t *Task) Init() error {
 	var err *multierror.Error
 
-	for processorName, processor := range t.processors {
-		var stores []Store
-		for _, store := range t.processorsToStores[processorName] {
-			stores = append(stores, t.stores[store])
-
-		}
-		err = multierror.Append(err, processor.Init(stores...))
+	for _, processor := range t.processors {
+		err = multierror.Append(err, processor.Init())
 	}
 
 	for _, store := range t.stores {

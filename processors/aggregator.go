@@ -21,6 +21,8 @@ type WindowedAggregator[Kin, Vin, State, Vout any] struct {
 	initFunc           func() State
 	aggregateFunc      func(Vin, State) State
 	finalizeFunc       func(State) Vout
+	storeName          string
+	processorContext   kstreams.ProcessorContext[WindowKey[Kin], Vout]
 }
 
 func NewWindowedAggregator[Kin, Vin, State, Vout any](
@@ -34,6 +36,7 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	storeBackendBuilder kstreams.StoreBackendBuilder,
 	keySerde kstreams.SerDe[Kin],
 	stateSerde kstreams.SerDe[State],
+	storeName string,
 ) (
 	kstreams.ProcessorBuilder[Kin, Vin, WindowKey[Kin], Vout],
 	kstreams.StoreBuilder,
@@ -45,6 +48,7 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 			initFunc:           initFunc,
 			aggregateFunc:      aggregateFunc,
 			finalizeFunc:       finalizeFunc,
+			storeName:          storeName,
 		}
 	}
 
@@ -54,7 +58,7 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 }
 
 // TODO change output Key to WindowKey[Kin]
-func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx kstreams.Context[WindowKey[Kin], Vout], k Kin, v Vin) error {
+func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx context.Context, k Kin, v Vin) error {
 	ts := p.timestampExtractor(k, v).Truncate(p.windowSize)
 	state, err := p.store.Get(k, ts)
 	if err != nil {
@@ -70,7 +74,7 @@ func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx kstreams.Context
 		return err
 	}
 
-	ctx.Forward(WindowKey[Kin]{
+	p.processorContext.Forward(ctx, WindowKey[Kin]{
 		Key:  k,
 		Time: ts,
 	}, p.finalizeFunc(state))
@@ -78,12 +82,9 @@ func (p *WindowedAggregator[Kin, Vin, State, Vout]) Process(ctx kstreams.Context
 	return nil
 }
 
-func (p *WindowedAggregator[Kin, Vin, State, Vout]) Init(stores ...kstreams.Store) error {
-	if len(stores) > 0 {
-		p.store = stores[0].(*WindowedKeyValueStore[Kin, State])
-	} else {
-		return fmt.Errorf("init: expected state store to be injected, but got none")
-	}
+func (p *WindowedAggregator[Kin, Vin, State, Vout]) Init(processorContext kstreams.ProcessorContext[WindowKey[Kin], Vout]) error {
+	p.processorContext = processorContext
+	p.store = processorContext.GetStore(p.storeName).(*WindowedKeyValueStore[Kin, State])
 	return nil
 }
 

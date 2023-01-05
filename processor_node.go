@@ -15,31 +15,31 @@ type InputProcessor[K any, V any] interface {
 var _ = InputProcessor[any, any](&ProcessorNode[any, any, any, any]{})
 
 type ProcessorNode[Kin any, Vin any, Kout any, Vout any] struct {
-	userProcessor Processor[Kin, Vin, Kout, Vout]
-	outputs       map[string]InputProcessor[Kout, Vout]
+	userProcessor    Processor[Kin, Vin, Kout, Vout]
+	processorContext *InternalProcessorContext[Kout, Vout]
 }
 
 func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Process(ctx context.Context, k Kin, v Vin) error {
-	userCtx := ProcessorContext[Kout, Vout]{
-		Context: ctx,
-		outputs: p.outputs,
-	}
-
-	err := p.userProcessor.Process(&userCtx, k, v)
+	err := p.userProcessor.Process(ctx, k, v)
 	if err != nil {
 		return err
 	}
 
-	var errs *multierror.Error
-	for _, err := range userCtx.outputErrors {
-		errs = multierror.Append(errs, err)
+	// FIXME this does not work. every node writes to the ctx and it's more or less random which node gets which error...
+	errz := p.processorContext.drainErrors()
+	if len(errz) > 0 {
+		var errs *multierror.Error
+		for _, err := range errz {
+			errs = multierror.Append(errs, err)
+		}
+		return errs.ErrorOrNil()
 	}
 
-	return errs.ErrorOrNil()
+	return nil
 }
 
-func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Init(stores ...Store) error {
-	return p.userProcessor.Init(stores...)
+func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Init() error {
+	return p.userProcessor.Init(p.processorContext)
 }
 
 func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Close() error {

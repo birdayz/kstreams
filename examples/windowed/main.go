@@ -54,6 +54,7 @@ func main() {
 		storeBackend,
 		serde.String,
 		serde.JSON[WindowState](), // store aggregation state as JSON. We could use something much more efficient, like apache arrow
+		"my-agg-store",
 	)
 	kstreams.RegisterStore(t, s, "my-agg-store")
 	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")

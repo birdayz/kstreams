@@ -71,7 +71,7 @@ type TopologySink struct {
 
 type TopologyProcessor struct {
 	Name           string
-	Build          func() BaseProcessor
+	Build          func(stores map[string]Store) Node
 	ChildNodeNames []string
 	AddChildFunc   func(parent any, child any, childName string) // TODO - possible to do w/o parent ?
 	StoreNames     []string
@@ -152,12 +152,16 @@ func MustRegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Proce
 func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, parent string, stores ...string) error {
 	topoProcessor := &TopologyProcessor{
 		Name: name,
-		Build: func() BaseProcessor {
-			px := &ProcessorNode[Kin, Vin, Kout, Vout]{
+		Build: func(stores map[string]Store) Node {
+			node := &ProcessorNode[Kin, Vin, Kout, Vout]{
 				userProcessor: p(),
-				outputs:       map[string]InputProcessor[Kout, Vout]{},
+				processorContext: &InternalProcessorContext[Kout, Vout]{
+					outputs: map[string]InputProcessor[Kout, Vout]{},
+					stores:  stores,
+				},
 			}
-			return px
+
+			return node
 		},
 		ChildNodeNames: []string{},
 		StoreNames:     stores,
@@ -178,12 +182,14 @@ func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Processor
 			panic("type error")
 		}
 
-		parentNode.outputs[childName] = childNode
+		parentNode.processorContext.outputs[childName] = childNode
 	}
 
 	if _, found := t.processors[name]; found {
 		return ErrNodeAlreadyExists
 	}
+
+	// how to add to processor context the stores?
 
 	t.processors[name] = topoProcessor
 
@@ -192,6 +198,7 @@ func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Processor
 			return errors.New("store not found")
 		}
 	}
+
 	return SetParent(t, parent, name)
 }
 

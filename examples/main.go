@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +21,7 @@ func init() {
 	zerologr.NameFieldName = "logger"
 	zerologr.NameSeparator = "/"
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.000Z07:00"}
-	zlog := zerolog.New(output).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	zlog := zerolog.New(output).Level(zerolog.InfoLevel).With().Timestamp().Logger()
 	log = &zlog
 
 	go func() {
@@ -41,10 +41,11 @@ func main() {
 		"printer",
 		"test",
 	)
+	kstreams.MustRegisterSink(builder, "testout", "testout", serde.StringSerializer, serde.StringSerializer, "printer")
 
 	topology := builder.MustBuild()
 
-	app := kstreams.New(topology, "my-sample-app", kstreams.WithLogr(zerologr.New(log)))
+	app := kstreams.New(topology, "my-sample-app", kstreams.WithLogr(zerologr.New(log)), kstreams.WithCommitInterval(time.Second*2))
 	go func() {
 		c := make(chan os.Signal)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -52,12 +53,18 @@ func main() {
 		app.Close()
 	}()
 
+	if err := app.Run(); err != nil {
+		log.Fatal().Msg(err.Error())
+	}
+
 }
 
 type PrintlnProcessor struct {
+	processorContext kstreams.ProcessorContext[string, string]
 }
 
-func (p *PrintlnProcessor) Init(stores ...kstreams.Store) error {
+func (p *PrintlnProcessor) Init(processorContext kstreams.ProcessorContext[string, string]) error {
+	p.processorContext = processorContext
 	return nil
 }
 
@@ -66,8 +73,9 @@ func (p *PrintlnProcessor) Close() error {
 }
 
 // TODO make output key WindowKey[string], and generalize this
-func (p *PrintlnProcessor) Process(ctx kstreams.Context[string, string], k string, v string) error {
-	fmt.Println("zzzz")
-	fmt.Println(k, v)
+func (p *PrintlnProcessor) Process(ctx context.Context, k string, v string) error {
+	p.processorContext.Forward(ctx, k, v+"out")
+	// fmt.Println("zzzz")
+	// fmt.Println(k, v)
 	return nil
 }

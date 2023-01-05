@@ -147,9 +147,9 @@ func (r *Worker) handleRunning() {
 
 	r.cancelPollMtx.Unlock()
 
-	r.log.V(0).Info("Polling Records")
+	r.log.V(1).Info("Polling Records")
 	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
-	r.log.V(2).Info("Polled Records")
+	r.log.V(1).Info("Polled Records")
 
 	if f.IsClientClosed() {
 		r.changeState(StateCloseRequested)
@@ -181,7 +181,7 @@ func (r *Worker) handleRunning() {
 		})
 
 		for _, fetch := range fetches {
-			r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
+			r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 			task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 			if err != nil {
 				r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)

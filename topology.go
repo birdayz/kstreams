@@ -106,7 +106,7 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 		stores[name] = builtStore
 	}
 
-	builtProcessors := map[string]BaseProcessor{}
+	builtProcessors := map[string]Node{}
 
 	// This includes sink nodes. Should be refactored to not include sink nodes, so we treat these completely separately.
 	var neededProcessors []string
@@ -120,7 +120,7 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 	for _, pr := range neededProcessors {
 		topoProcessor, ok := t.processors[pr]
 		if ok {
-			built := topoProcessor.Build()
+			built := topoProcessor.Build(stores)
 
 			builtProcessors[topoProcessor.Name] = built
 		} else {
@@ -196,7 +196,6 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 				}
 
 				node.AddChildFunc(builtProcessor, child, childSink.Name)
-
 			}
 		}
 	}
@@ -209,6 +208,8 @@ func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Clie
 			processorStores[processorName] = proc.StoreNames
 		}
 	}
+
+	fmt.Println(processorStores)
 
 	task := NewTask(topics, partition, builtSources, stores, builtProcessors, builtSinks, processorStores)
 	return task, nil

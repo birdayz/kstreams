@@ -1,6 +1,8 @@
 package processors
 
 import (
+	"context"
+
 	"github.com/birdayz/kstreams"
 )
 
@@ -16,12 +18,12 @@ type ForEachProcessor[Kin, Vin any] struct {
 	forEachFunc func(Kin, Vin)
 }
 
-func (p *ForEachProcessor[Kin, Vin]) Process(ctx kstreams.Context[Kin, Vin], k Kin, v Vin) error {
+func (p *ForEachProcessor[Kin, Vin]) Process(ctx context.Context, k Kin, v Vin) error {
 	p.forEachFunc(k, v)
 	return nil
 }
 
-func (p *ForEachProcessor[Kin, Vin]) Init(stores ...kstreams.Store) error {
+func (p *ForEachProcessor[Kin, Vin]) Init(processorContext kstreams.ProcessorContext[Kin, Vin]) error {
 	return nil
 }
 
