@@ -17,6 +17,6 @@ services:
       - --overprovisioned
       - --node-id
       - "0"
-    image: docker.vectorized.io/vectorized/redpanda:latest
+    image: docker.vectorized.io/vectorized/redpanda:v22.3.9
     ports:
       - 9092:9092
