@@ -8,7 +8,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/go-logr/stdr v1.2.2
 	github.com/testcontainers/testcontainers-go v0.13.1-0.20220519090050-154b938070bd
-	github.com/twmb/franz-go v1.10.4
+	github.com/twmb/franz-go v1.11.0
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
 )
 

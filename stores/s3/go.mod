@@ -30,7 +30,7 @@ require (
 	github.com/rs/xid v1.2.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/smartystreets/assertions v1.13.0 // indirect
-	github.com/twmb/franz-go v1.10.4 // indirect
+	github.com/twmb/franz-go v1.11.0 // indirect
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8 // indirect
