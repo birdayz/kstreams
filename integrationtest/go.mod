@@ -3,7 +3,7 @@ module github.com/birdayz/kstreams/integrationtest
 go 1.19
 
 require (
-	github.com/alecthomas/assert/v2 v2.1.0
+	github.com/alecthomas/assert/v2 v2.2.0
 	github.com/birdayz/kstreams v0.0.0-20220407000846-92fbed7c989e
 	github.com/docker/go-connections v0.4.0
 	github.com/go-logr/stdr v1.2.2
