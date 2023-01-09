@@ -3,7 +3,7 @@ module github.com/birdayz/kstreams
 go 1.19
 
 require (
-	github.com/alecthomas/assert/v2 v2.2.0
+	github.com/alecthomas/assert/v2 v2.2.1
 	github.com/go-logr/logr v1.2.4-0.20221203165057-4da5305ff29a
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/twmb/franz-go v1.11.0
@@ -14,7 +14,7 @@ require (
 )
 
 require (
-	github.com/alecthomas/repr v0.1.0 // indirect
+	github.com/alecthomas/repr v0.2.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
