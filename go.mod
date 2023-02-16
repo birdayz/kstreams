@@ -6,9 +6,9 @@ require (
 	github.com/alecthomas/assert/v2 v2.2.0
 	github.com/go-logr/logr v1.2.4-0.20221203165057-4da5305ff29a
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/twmb/franz-go v1.11.0
+	github.com/twmb/franz-go v1.12.1
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
-	github.com/twmb/franz-go/pkg/kmsg v1.2.0
+	github.com/twmb/franz-go/pkg/kmsg v1.4.0
 	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
