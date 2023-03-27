@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/twmb/franz-go v1.11.0
 	github.com/twmb/franz-go/pkg/kadm v0.0.0-20220215213838-c67ef7e57058
-	github.com/twmb/franz-go/pkg/kmsg v1.2.0
+	github.com/twmb/franz-go/pkg/kmsg v1.5.0
 	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
