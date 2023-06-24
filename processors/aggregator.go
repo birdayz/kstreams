@@ -28,6 +28,7 @@ type WindowedAggregator[Kin, Vin, State, Vout any] struct {
 func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	timestampExtractor func(Kin, Vin) time.Time,
 	windowSize time.Duration,
+	windowKeyMapper func(time.Time) WindowKey[Kin],
 	initFunc func() State,
 	aggregateFunc func(Vin, State) State,
 	finalizeFunc func(State) Vout,
@@ -37,6 +38,8 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	keySerde kstreams.SerDe[Kin],
 	stateSerde kstreams.SerDe[State],
 	storeName string,
+	// TODO add trigger - when to call finalize.
+	// TODO maybe introduce interface for aggregator, so people can plug custom aggregators?
 ) (
 	kstreams.ProcessorBuilder[Kin, Vin, WindowKey[Kin], Vout],
 	kstreams.StoreBuilder,
@@ -224,7 +227,7 @@ func WindowKeyDeserializer[K any](deserializer kstreams.Deserializer[K]) kstream
 	return func(b []byte) (key WindowKey[K], err error) {
 		length := binary.BigEndian.Uint16(b)
 		if len(b) < int(length)+1+8 {
-			return WindowKey[K]{}, fmt.Errorf("eof")
+			return WindowKey[K]{}, fmt.Errorf("unexpected eof")
 		}
 
 		b = b[2:]

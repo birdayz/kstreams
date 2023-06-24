@@ -5,12 +5,6 @@ import (
 	"errors"
 )
 
-type Store interface {
-	Init() error
-	Flush(context.Context) error
-	Close() error
-}
-
 var (
 	ErrKeyNotFound = errors.New("store: key not found")
 )
@@ -60,12 +54,16 @@ func (t *KeyValueStore[K, V]) Init() error {
 	return t.store.Init()
 }
 
-func (t *KeyValueStore[K, V]) Flush(ctx context.Context) error {
-	return t.store.Flush(ctx)
+func (t *KeyValueStore[K, V]) Flush() error {
+	return t.store.Flush()
 }
 
 func (t *KeyValueStore[K, V]) Close() error {
 	return t.store.Close()
+}
+
+func (t *KeyValueStore[K, V]) Checkpoint(ctx context.Context, id string) error {
+	return nil
 }
 
 func (t *KeyValueStore[K, V]) Set(k K, v V) error {

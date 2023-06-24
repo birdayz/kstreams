@@ -56,10 +56,10 @@ func main() {
 		serde.JSON[WindowState](), // store aggregation state as JSON. We could use something much more efficient, like apache arrow
 		"my-agg-store",
 	)
-	kstreams.RegisterStore(t, s, "my-agg-store")
-	kstreams.RegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
+	kstreams.MustRegisterStore(t, s, "my-agg-store")
+	kstreams.MustRegisterProcessor(t, p, "my-agg-processor", "sensor-data", "my-agg-store")
 
-	kstreams.RegisterSink(t, "custom-agg-out", "message-count", serde.JSONSerializer[processors.WindowKey[string]](), serde.JSONSerializer[float64](), "my-agg-processor")
+	kstreams.MustRegisterSink(t, "custom-agg-out", "message-count", serde.JSONSerializer[processors.WindowKey[string]](), serde.JSONSerializer[float64](), "my-agg-processor")
 
 	app := kstreams.New(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLogr(zerologr.New(log)))
 
