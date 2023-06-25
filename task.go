@@ -91,7 +91,7 @@ func (t *Task) Flush(ctx context.Context) error {
 	var err *multierror.Error
 
 	for _, store := range t.stores {
-		err = multierror.Append(err, store.Flush(ctx))
+		err = multierror.Append(err, store.Flush())
 	}
 
 	for _, sink := range t.sinks {

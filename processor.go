@@ -1,6 +1,10 @@
 package kstreams
 
-import "context"
+import (
+	"context"
+
+	"github.com/twmb/franz-go/pkg/kgo"
+)
 
 // Processor is a low-level interface. The implementation can retain the
 // ProcessorContext passed into Init and use it to access state stores and
@@ -12,6 +16,18 @@ type Processor[Kin any, Vin any, Kout any, Vout any] interface {
 	Init(ProcessorContext[Kout, Vout]) error
 	Close() error
 	Process(ctx context.Context, k Kin, v Vin) error
+}
+
+type Input[Kin any, Vin any] struct {
+}
+
+type Record[K, V any] struct {
+	Key   K
+	Value V
+	X     kgo.Record
+}
+
+type Output[Kout any, Vout any] struct {
 }
 
 // ProcessorBuilder creates an actual processor for a specific TopicPartition.
