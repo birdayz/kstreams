@@ -178,7 +178,7 @@ func (t *TaskManager) commit(ctx context.Context) error {
 			if _, ok := data[topic]; !ok {
 				data[topic] = make(map[int32]kgo.EpochOffset)
 			}
-			data[topic][task.partition] = kgo.EpochOffset{Offset: offset}
+			data[topic][task.partition] = kgo.EpochOffset{Epoch: offset.Epoch, Offset: offset.Offset}
 		}
 	}
 	errCh := make(chan error, 1)
