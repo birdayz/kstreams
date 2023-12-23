@@ -1,11 +1,5 @@
 version: "3.9"
 services:
-  minio:
-    command: server /data --console-address ":9001"
-    image: minio/minio:latest
-    ports:
-      - 9000:9000
-      - 9001:9001
   redpanda:
     command:
       - redpanda
@@ -17,6 +11,6 @@ services:
       - --overprovisioned
       - --node-id
       - "0"
-    image: docker.vectorized.io/vectorized/redpanda:v23.1.12
+    image: redpandadata/redpanda:v23.3.1
     ports:
       - 9092:9092

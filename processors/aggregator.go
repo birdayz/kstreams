@@ -28,7 +28,6 @@ type WindowedAggregator[Kin, Vin, State, Vout any] struct {
 func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	timestampExtractor func(Kin, Vin) time.Time,
 	windowSize time.Duration,
-	windowKeyMapper func(time.Time) WindowKey[Kin],
 	initFunc func() State,
 	aggregateFunc func(Vin, State) State,
 	finalizeFunc func(State) Vout,
@@ -162,8 +161,8 @@ func (t *WindowedKeyValueStore[K, V]) Init() error {
 	return t.store.Init()
 }
 
-func (t *WindowedKeyValueStore[K, V]) Flush(ctx context.Context) error {
-	return t.store.Flush(ctx)
+func (t *WindowedKeyValueStore[K, V]) Flush() error {
+	return t.store.Flush()
 }
 
 func (t *WindowedKeyValueStore[K, V]) Close() error {
