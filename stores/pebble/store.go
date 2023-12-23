@@ -17,8 +17,12 @@ func (s *pebbleStore) Init() error {
 	return nil
 }
 
-func (s *pebbleStore) Flush(ctx context.Context) error {
+func (s *pebbleStore) Flush() error {
 	return s.db.Flush()
+}
+
+func (s *pebbleStore) Checkpoint(ctx context.Context, id string) error {
+	return nil
 }
 
 func (s *pebbleStore) Close() error {

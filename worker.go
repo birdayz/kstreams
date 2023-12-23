@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -93,7 +94,7 @@ func NewWorker(log logr.Logger, name string, t *Topology, group string, brokers 
 
 	tm.client = client
 
-	sr := &Worker{
+	w := &Worker{
 		name:              name,
 		log:               log.WithValues("worker", name),
 		group:             group,
@@ -107,8 +108,8 @@ func NewWorker(log logr.Logger, name string, t *Topology, group string, brokers 
 		taskManager:       tm,
 		commitInterval:    commitInterval,
 	}
-	sr.closed.Add(1)
-	return sr, nil
+	w.closed.Add(1)
+	return w, nil
 }
 
 func (r *Worker) changeState(newState RoutineState) {
@@ -161,7 +162,6 @@ func (r *Worker) handleRunning() {
 	}
 
 	if !errors.Is(f.Err(), context.DeadlineExceeded) {
-		var fetches []kgo.FetchTopicPartition
 		for _, fetchError := range f.Errors() {
 			if errors.Is(fetchError.Err, context.DeadlineExceeded) {
 				continue
@@ -169,18 +169,13 @@ func (r *Worker) handleRunning() {
 			r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
 			if fetchError.Err != nil {
 				r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
+				spew.Dump(fetchError)
 				r.changeState(StateCloseRequested)
 				return
 			}
 		}
 
 		f.EachPartition(func(fetch kgo.FetchTopicPartition) {
-			if fetch.Err == nil {
-				fetches = append(fetches, fetch)
-			}
-		})
-
-		for _, fetch := range fetches {
 			r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 			task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 			if err != nil {
@@ -205,7 +200,9 @@ func (r *Worker) handleRunning() {
 				}
 			}
 			r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
-		}
+
+		})
+
 	}
 
 	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)

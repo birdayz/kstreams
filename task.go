@@ -16,7 +16,7 @@ type Task struct {
 	topics    []string
 	partition int32
 
-	committableOffsets map[string]int64 // Topic => offset
+	committableOffsets map[string]kgo.EpochOffset // Topic => offset
 
 	processors map[string]Node
 
@@ -31,7 +31,7 @@ func NewTask(topics []string, partition int32, rootNodes map[string]RecordProces
 		stores:             stores,
 		topics:             topics,
 		partition:          partition,
-		committableOffsets: map[string]int64{},
+		committableOffsets: map[string]kgo.EpochOffset{},
 		processors:         processors,
 		sinks:              sinks,
 		processorsToStores: processorToStore,
@@ -48,7 +48,7 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 		if err := p.Process(ctx, record); err != nil {
 			return fmt.Errorf("failed to process record: %w", err)
 		}
-		t.committableOffsets[record.Topic] = record.Offset + 1
+		t.committableOffsets[record.Topic] = kgo.EpochOffset{Epoch: record.LeaderEpoch, Offset: record.Offset + 1}
 	}
 
 	return nil
@@ -76,7 +76,7 @@ func (t *Task) Close(ctx context.Context) error {
 	return err.ErrorOrNil()
 }
 
-func (t *Task) GetOffsetsToCommit() map[string]int64 {
+func (t *Task) GetOffsetsToCommit() map[string]kgo.EpochOffset {
 	return t.committableOffsets
 }
 
@@ -91,7 +91,7 @@ func (t *Task) Flush(ctx context.Context) error {
 	var err *multierror.Error
 
 	for _, store := range t.stores {
-		err = multierror.Append(err, store.Flush(ctx))
+		err = multierror.Append(err, store.Flush())
 	}
 
 	for _, sink := range t.sinks {

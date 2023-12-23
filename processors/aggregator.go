@@ -37,6 +37,8 @@ func NewWindowedAggregator[Kin, Vin, State, Vout any](
 	keySerde kstreams.SerDe[Kin],
 	stateSerde kstreams.SerDe[State],
 	storeName string,
+	// TODO add trigger - when to call finalize.
+	// TODO maybe introduce interface for aggregator, so people can plug custom aggregators?
 ) (
 	kstreams.ProcessorBuilder[Kin, Vin, WindowKey[Kin], Vout],
 	kstreams.StoreBuilder,
@@ -159,8 +161,8 @@ func (t *WindowedKeyValueStore[K, V]) Init() error {
 	return t.store.Init()
 }
 
-func (t *WindowedKeyValueStore[K, V]) Flush(ctx context.Context) error {
-	return t.store.Flush(ctx)
+func (t *WindowedKeyValueStore[K, V]) Flush() error {
+	return t.store.Flush()
 }
 
 func (t *WindowedKeyValueStore[K, V]) Close() error {
@@ -224,7 +226,7 @@ func WindowKeyDeserializer[K any](deserializer kstreams.Deserializer[K]) kstream
 	return func(b []byte) (key WindowKey[K], err error) {
 		length := binary.BigEndian.Uint16(b)
 		if len(b) < int(length)+1+8 {
-			return WindowKey[K]{}, fmt.Errorf("eof")
+			return WindowKey[K]{}, fmt.Errorf("unexpected eof")
 		}
 
 		b = b[2:]
