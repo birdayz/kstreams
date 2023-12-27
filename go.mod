@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/alecthomas/assert/v2 v2.2.0
 	github.com/davecgh/go-spew v1.1.1
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.4.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/twmb/franz-go v1.15.4
 	github.com/twmb/franz-go/pkg/kadm v1.10.0
