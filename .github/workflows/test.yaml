@@ -18,6 +18,7 @@ jobs:
     - uses: actions/setup-go@v4
       with:
         go-version: ${{ matrix.go-version }}
+    - uses: actions/checkout@v3
     - name: Setup Golang caches
       uses: actions/cache@v3
       with:
@@ -27,5 +28,4 @@ jobs:
         key: ${{ runner.os }}-golang-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-golang-
-    - uses: actions/checkout@v3
     - run: make test
