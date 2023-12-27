@@ -3,10 +3,10 @@ package kstreams
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"unsafe"
 
-	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"golang.org/x/exp/slices"
@@ -18,10 +18,10 @@ type PartitionGroupBalancer struct {
 	inner kgo.GroupBalancer
 	pgs   []*PartitionGroup
 
-	log logr.Logger
+	log *slog.Logger
 }
 
-func NewPartitionGroupBalancer(log logr.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
+func NewPartitionGroupBalancer(log *slog.Logger, pgs []*PartitionGroup) kgo.GroupBalancer {
 	return &PartitionGroupBalancer{inner: kgo.CooperativeStickyBalancer(), pgs: pgs, log: log}
 }
 
@@ -73,7 +73,7 @@ type WrappingMemberBalancer struct {
 
 	memberByName map[string]*kmsg.JoinGroupResponseMember
 
-	log logr.Logger
+	log *slog.Logger
 }
 
 type BalanceError struct {
@@ -127,7 +127,7 @@ func (wb *WrappingMemberBalancer) BalanceOrError(topics map[string]int32) (kgo.I
 		if imbalance {
 			pgTopics := []string{firstTopic}
 			pgTopics = append(pgTopics, additionals[firstTopic]...)
-			wb.log.Error(nil, "PartitionGroup not co-partitioned.", "partitionGroupTopics", pgTopics, "usedPartitions", safePartitions)
+			wb.log.Error("PartitionGroup not co-partitioned.", "partitionGroupTopics", pgTopics, "usedPartitions", safePartitions)
 			return nil, fmt.Errorf("PartitionGroup is not co-partitioned")
 		}
 	}
