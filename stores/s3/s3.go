@@ -21,7 +21,7 @@ func (s *s3Store) Init() error {
 	return nil
 }
 
-func (s *s3Store) Flush(ctx context.Context) error {
+func (s *s3Store) Flush() error {
 	return nil
 }
 

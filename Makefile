@@ -1,6 +1,6 @@
 tidy: 
-	find . -name go.mod -not -path "*/.*" | xargs dirname |  xargs -i sh -c 'cd {} && go mod tidy'
+	go list -f '{{.Dir}}' -m | xargs -L1 go mod tidy -C
 test:
-	find . -name go.mod -not -path "*/.*" | xargs dirname |  xargs -i sh -c 'cd {} && go test -v ./...'
+	go list -f '{{.Dir}}/...' -m | xargs go test
 lint:
 	golangci-lint run
