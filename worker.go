@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/go-logr/logr"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -27,7 +27,7 @@ const (
 type Worker struct {
 	client      *kgo.Client
 	adminClient *kadm.Client
-	log         logr.Logger
+	log         *slog.Logger
 	group       string
 
 	t *Topology
@@ -64,7 +64,7 @@ type AssignedOrRevoked struct {
 }
 
 // Config
-func NewWorker(log logr.Logger, name string, t *Topology, group string, brokers []string, commitInterval time.Duration) (*Worker, error) {
+func NewWorker(log *slog.Logger, name string, t *Topology, group string, brokers []string, commitInterval time.Duration) (*Worker, error) {
 	tm := &TaskManager{
 		tasks:    []*Task{},
 		log:      log,
@@ -96,7 +96,7 @@ func NewWorker(log logr.Logger, name string, t *Topology, group string, brokers 
 
 	w := &Worker{
 		name:              name,
-		log:               log.WithValues("worker", name),
+		log:               log.With("worker", name),
 		group:             group,
 		client:            client,
 		adminClient:       kadm.NewClient(client),
@@ -148,9 +148,9 @@ func (r *Worker) handleRunning() {
 
 	r.cancelPollMtx.Unlock()
 
-	r.log.V(1).Info("Polling Records")
+	r.log.Debug("Polling Records")
 	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
-	r.log.V(1).Info("Polled Records")
+	r.log.Debug("Polled Records")
 
 	if f.IsClientClosed() {
 		r.changeState(StateCloseRequested)
@@ -166,7 +166,7 @@ func (r *Worker) handleRunning() {
 			if errors.Is(fetchError.Err, context.DeadlineExceeded) {
 				continue
 			}
-			r.log.Error(fetchError.Err, "fetch error", "topic", fetchError.Topic, "partition", fetchError.Partition)
+			r.log.Error("fetch error", fetchError.Err, "topic", fetchError.Topic, "partition", fetchError.Partition)
 			if fetchError.Err != nil {
 				r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
 				spew.Dump(fetchError)
@@ -176,10 +176,10 @@ func (r *Worker) handleRunning() {
 		}
 
 		f.EachPartition(func(fetch kgo.FetchTopicPartition) {
-			r.log.V(1).Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
+			r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
 			task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 			if err != nil {
-				r.log.Error(err, "failed to lookup task", "topic", fetch.Topic, "partition", fetch.Partition)
+				r.log.Error("failed to lookup task", err, "topic", fetch.Topic, "partition", fetch.Partition)
 				r.changeState(StateCloseRequested)
 				return
 			}
@@ -193,13 +193,13 @@ func (r *Worker) handleRunning() {
 				err := task.Process(recordCtx, record)
 				cancel()
 				if err != nil {
-					r.log.Error(err, "Failed to process record") // TODO - provide middlewares to handle this error. is it always a user code error?
+					r.log.Error("Failed to process record", err) // TODO - provide middlewares to handle this error. is it always a user code error?
 					r.changeState(StateCloseRequested)
 					r.err = err
 					return
 				}
 			}
-			r.log.V(2).Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
+			r.log.Info("Processed", "topic", fetch.Topic, "partition", fetch.Partition)
 
 		})
 
@@ -208,12 +208,12 @@ func (r *Worker) handleRunning() {
 	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	if err := r.maybeCommit(commitCtx); err != nil {
-		r.log.Error(err, "failed to commit")
+		r.log.Error("failed to commit", err)
 		r.changeState(StateCloseRequested)
 		r.err = err
 		return
 	}
-	r.log.V(1).Info("Committed offests")
+	r.log.Info("Committed offests")
 }
 
 func (r *Worker) maybeCommit(ctx context.Context) error {
@@ -237,11 +237,11 @@ func (r *Worker) handleClosed() {
 
 func (r *Worker) handlePartitionsAssigned() {
 	if err := r.taskManager.Revoked(r.newlyRevoked); err != nil {
-		r.log.Error(err, "revoked failed")
+		r.log.Error("revoked failed", err)
 	}
 
 	if err := r.taskManager.Assigned(r.newlyAssigned); err != nil {
-		r.log.Error(err, "assigned failed")
+		r.log.Error("assigned failed", err)
 		r.changeState(StateCloseRequested)
 		return
 	}
@@ -261,10 +261,10 @@ func (r *Worker) handleCloseRequested() {
 	wg.Add(1)
 
 	if err := r.client.Flush(context.TODO()); err != nil {
-		r.log.Error(err, "Failed to flush client")
+		r.log.Error("Failed to flush client", err)
 	}
 	if err := r.taskManager.Commit(context.TODO()); err != nil {
-		r.log.Error(err, "Failed to commit")
+		r.log.Error("Failed to commit", err)
 	}
 
 	go func() {
@@ -277,7 +277,7 @@ func (r *Worker) handleCloseRequested() {
 
 	err := r.taskManager.Close(context.TODO())
 	if err != nil {
-		r.log.Error(err, "Failed to close tasks")
+		r.log.Error("Failed to close tasks", err)
 	}
 
 	r.client.Close()

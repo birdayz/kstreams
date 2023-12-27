@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
-	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-multierror"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -17,7 +17,7 @@ type TaskManager struct {
 	tasks []*Task
 
 	client *kgo.Client
-	log    logr.Logger
+	log    *slog.Logger
 
 	topology *Topology
 

@@ -2,9 +2,9 @@ package kstreams
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/go-logr/logr"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -18,7 +18,7 @@ type App struct {
 
 	routines []*Worker
 
-	log logr.Logger
+	log *slog.Logger
 
 	eg *errgroup.Group
 
@@ -31,7 +31,7 @@ var WithWorkersCount = func(n int) Option {
 	}
 }
 
-var WithLogr = func(log logr.Logger) Option {
+var WithLog = func(log *slog.Logger) Option {
 	return func(s *App) {
 		s.log = log
 	}
@@ -49,6 +49,14 @@ var WithCommitInterval = func(commitInterval time.Duration) Option {
 	}
 }
 
+type NullWriter struct{}
+
+func (NullWriter) Write([]byte) (int, error) { return 0, nil }
+
+func NullLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(NullWriter{}, nil))
+}
+
 func New(t *Topology, groupName string, opts ...Option) *App {
 	s := &App{
 		numRoutines:    1,
@@ -56,7 +64,7 @@ func New(t *Topology, groupName string, opts ...Option) *App {
 		groupName:      groupName,
 		t:              t,
 		routines:       []*Worker{},
-		log:            logr.Discard(),
+		log:            NullLogger(),
 		commitInterval: time.Second * 5,
 	}
 
@@ -74,7 +82,7 @@ func (c *App) Run() error {
 	c.eg = &grp
 	for i := 0; i < c.numRoutines; i++ {
 		routine, err := NewWorker(
-			c.log.WithName("worker"),
+			c.log.WithGroup("worker"),
 			fmt.Sprintf("routine-%d", i),
 			c.t,
 			c.groupName,

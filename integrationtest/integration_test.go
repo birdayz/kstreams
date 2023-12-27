@@ -2,12 +2,12 @@ package integrationtest
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/serde"
-	"github.com/go-logr/stdr"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/redpanda"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -84,7 +84,7 @@ func TestWithSimpleProcessor(t *testing.T) {
 				}
 			}, "my-processor", "source")
 
-			app := kstreams.New(topo.MustBuild(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLogr(stdr.New(nil)))
+			app := kstreams.New(topo.MustBuild(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 			go func() {
 				err := app.Run()
 				assert.NoError(t, err)

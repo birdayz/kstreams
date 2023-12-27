@@ -5,7 +5,6 @@ go 1.19
 require (
 	github.com/alecthomas/assert/v2 v2.2.0
 	github.com/birdayz/kstreams v0.0.0-20220407000846-92fbed7c989e
-	github.com/go-logr/stdr v1.2.2
 	github.com/testcontainers/testcontainers-go v0.27.1-0.20231222122200-9060ff78823e
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.27.0
 	github.com/twmb/franz-go v1.15.4
@@ -27,7 +26,6 @@ require (
 	github.com/docker/docker v24.0.7+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
