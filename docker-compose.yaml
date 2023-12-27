@@ -11,6 +11,6 @@ services:
       - --overprovisioned
       - --node-id
       - "0"
-    image: redpandadata/redpanda:v23.3.1
+    image: redpandadata/redpanda:latest
     ports:
       - 9092:9092
