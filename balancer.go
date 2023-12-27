@@ -1,6 +1,7 @@
 package kstreams
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"unsafe"
@@ -88,6 +89,10 @@ func (e *BalanceError) IntoSyncAssignmentOrError() ([]kmsg.SyncGroupRequestGroup
 }
 
 func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncAssignment {
+	return nil
+}
+
+func (wb *WrappingMemberBalancer) BalanceOrError(topics map[string]int32) (kgo.IntoSyncAssignment, error) {
 	firstTopics := make([]string, 0, len(wb.pgs))
 	additionals := map[string][]string{} // firstTopics => rest
 
@@ -123,16 +128,18 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 			pgTopics := []string{firstTopic}
 			pgTopics = append(pgTopics, additionals[firstTopic]...)
 			wb.log.Error(nil, "PartitionGroup not co-partitioned.", "partitionGroupTopics", pgTopics, "usedPartitions", safePartitions)
-			return &BalanceError{err: fmt.Errorf("PartitionGroup is not co-partitioned")}
+			return nil, fmt.Errorf("PartitionGroup is not co-partitioned")
 		}
 	}
 
 	plan, err := wb.inner.(kgo.GroupMemberBalancerOrError).BalanceOrError(strippedMap)
-	_ = err
+	if err != nil {
+		return nil, err
+	}
 
 	balancePlan, ok := plan.(*kgo.BalancePlan)
 	if !ok {
-		panic("invalid balance plan type, this should not happen and indicates an incompatibility with franz-go")
+		return nil, errors.New("invalid balance plan type, this should not happen and indicates an incompatibility with franz-go")
 	}
 
 	planMap := wb.getPlanMap(balancePlan)
@@ -149,7 +156,7 @@ func (wb *WrappingMemberBalancer) Balance(topics map[string]int32) kgo.IntoSyncA
 
 	}
 
-	return plan
+	return plan, nil
 }
 
 func (wb *WrappingMemberBalancer) getPlanMap(i *kgo.BalancePlan) map[string]map[string][]int32 {

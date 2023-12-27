@@ -2,17 +2,14 @@ package integrationtest
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/serde"
-	"github.com/docker/go-connections/nat"
 	"github.com/go-logr/stdr"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/testcontainers/testcontainers-go/modules/redpanda"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -31,50 +28,19 @@ type RedpandaBroker struct {
 
 func (b *RedpandaBroker) Init() error {
 	ctx := context.Background()
-	port, err := GetFreePort()
+
+	redpandaContainer, err := redpanda.RunContainer(ctx)
 	if err != nil {
-		return err
-	}
-	req := testcontainers.ContainerRequest{
-		Image:      fmt.Sprintf("docker.vectorized.io/vectorized/redpanda:%s", b.RedpandaVersion),
-		WaitingFor: wait.ForLog("Successfully started Redpanda!"),
-		User:       "root:root",
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--smp", "1",
-			"--reserve-memory", "0M",
-			"--overprovisioned",
-			"--node-id", "0",
-			"--kafka-addr", fmt.Sprintf("OUTSIDE://0.0.0.0:%d", port),
-		},
+		panic(err)
 	}
 
-	req.ExposedPorts = []string{
-		// Fixed port mapping for kafka
-		fmt.Sprintf("%d:%d/tcp", port, port),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
+	b.testcontainer = redpandaContainer
+	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	if err != nil {
 		return err
 	}
 
-	hostIP, err := container.Host(ctx)
-	if err != nil {
-		return err
-	}
-
-	mappedPort, err := container.MappedPort(ctx, nat.Port(fmt.Sprintf("%d", port)))
-	if err != nil {
-		return err
-	}
-
-	b.bootstrapServers = []string{fmt.Sprintf("%s:%d", hostIP, mappedPort.Int())}
-	b.testcontainer = container
+	b.bootstrapServers = []string{bootstrapServer}
 
 	return nil
 }
@@ -85,21 +51,6 @@ func (b *RedpandaBroker) Close() error {
 
 func (b *RedpandaBroker) BootstrapServers() []string {
 	return b.bootstrapServers
-}
-
-// GetFreePort asks the kernel for a free open port that is ready to use.
-func GetFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func TestWithSimpleProcessor(t *testing.T) {
@@ -144,7 +95,6 @@ func TestWithSimpleProcessor(t *testing.T) {
 
 			o := <-out
 			assert.Equal(t, [...]string{"some-key", "some-val"}, o)
-
 		})
 	}
 }
