@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -169,7 +168,6 @@ func (r *Worker) handleRunning() {
 			r.log.Error("fetch error", fetchError.Err, "topic", fetchError.Topic, "partition", fetchError.Partition)
 			if fetchError.Err != nil {
 				r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
-				spew.Dump(fetchError)
 				r.changeState(StateCloseRequested)
 				return
 			}

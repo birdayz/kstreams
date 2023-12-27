@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 
+	"slices"
+
 	"github.com/twmb/franz-go/pkg/kgo"
-	"golang.org/x/exp/slices"
 )
 
 // Topology is a fully built DAG that can be used in a kstreams app.

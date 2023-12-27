@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/hashicorp/go-multierror"
+	"slices"
+
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
-	"golang.org/x/exp/slices"
 )
 
 type TaskManager struct {
@@ -216,13 +216,13 @@ func (t *TaskManager) commit(ctx context.Context) error {
 }
 
 func (t *TaskManager) Close(ctx context.Context) error {
-	var err *multierror.Error
+	var err error
 
 	for _, task := range t.tasks {
-		err = multierror.Append(err, task.Close(ctx))
+		err = errors.Join(err, task.Close(ctx))
 	}
 
-	return err.ErrorOrNil()
+	return err
 }
 
 func (t *TaskManager) TaskFor(topic string, partition int32) (*Task, error) {

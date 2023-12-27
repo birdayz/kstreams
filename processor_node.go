@@ -2,8 +2,7 @@ package kstreams
 
 import (
 	"context"
-
-	"github.com/hashicorp/go-multierror"
+	"errors"
 )
 
 // InputProcessor is a partial interface covering only the generic input K/V,
@@ -28,11 +27,11 @@ func (p *ProcessorNode[Kin, Vin, Kout, Vout]) Process(ctx context.Context, k Kin
 	// FIXME this does not work. every node writes to the ctx and it's more or less random which node gets which error...
 	errz := p.processorContext.drainErrors()
 	if len(errz) > 0 {
-		var errs *multierror.Error
+		var errs error
 		for _, err := range errz {
-			errs = multierror.Append(errs, err)
+			errs = errors.Join(errs, err)
 		}
-		return errs.ErrorOrNil()
+		return errs
 	}
 
 	return nil

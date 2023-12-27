@@ -7,9 +7,10 @@ import (
 	"reflect"
 	"unsafe"
 
+	"slices"
+
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
-	"golang.org/x/exp/slices"
 )
 
 // PartitionGroupBalancer is a balancer that uses kgo's Cooperative-sticky balancer under the hood,

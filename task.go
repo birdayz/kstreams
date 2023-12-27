@@ -2,9 +2,9 @@ package kstreams
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -25,7 +25,6 @@ type Task struct {
 }
 
 func NewTask(topics []string, partition int32, rootNodes map[string]RecordProcessor, stores map[string]Store, processors map[string]Node, sinks map[string]Flusher, processorToStore map[string][]string) *Task {
-	// spew.Dump(processorToStore)
 	return &Task{
 		rootNodes:          rootNodes,
 		stores:             stores,
@@ -55,25 +54,25 @@ func (t *Task) Process(ctx context.Context, records ...*kgo.Record) error {
 }
 
 func (t *Task) Init() error {
-	var err *multierror.Error
+	var err error
 
 	for _, processor := range t.processors {
-		err = multierror.Append(err, processor.Init())
+		err = errors.Join(err, processor.Init())
 	}
 
 	for _, store := range t.stores {
-		err = multierror.Append(err, store.Init())
+		err = errors.Join(err, store.Init())
 	}
 
-	return err.ErrorOrNil()
+	return err
 }
 
 func (t *Task) Close(ctx context.Context) error {
-	var err *multierror.Error
+	var err error
 	for _, store := range t.stores {
-		err = multierror.Append(err, store.Close())
+		err = errors.Join(err, store.Close())
 	}
-	return err.ErrorOrNil()
+	return err
 }
 
 func (t *Task) GetOffsetsToCommit() map[string]kgo.EpochOffset {
@@ -88,17 +87,17 @@ func (t *Task) ClearOffsets() {
 
 // Flush flushes state stores and sinks.
 func (t *Task) Flush(ctx context.Context) error {
-	var err *multierror.Error
+	var err error
 
 	for _, store := range t.stores {
-		err = multierror.Append(err, store.Flush())
+		err = errors.Join(err, store.Flush())
 	}
 
 	for _, sink := range t.sinks {
-		err = multierror.Append(err, sink.Flush(ctx))
+		err = errors.Join(err, sink.Flush(ctx))
 	}
 
-	return err.ErrorOrNil()
+	return err
 }
 
 func (t *Task) String() string {

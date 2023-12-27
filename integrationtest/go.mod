@@ -1,9 +1,11 @@
 module github.com/birdayz/kstreams/integrationtest
 
-go 1.19
+go 1.21
+
+toolchain go1.21.5
 
 require (
-	github.com/alecthomas/assert/v2 v2.2.0
+	github.com/alecthomas/assert/v2 v2.4.1
 	github.com/birdayz/kstreams v0.0.0-20220407000846-92fbed7c989e
 	github.com/testcontainers/testcontainers-go v0.27.1-0.20231222122200-9060ff78823e
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.27.0
@@ -16,12 +18,11 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/Microsoft/hcsshim v0.11.4 // indirect
-	github.com/alecthomas/repr v0.1.0 // indirect
+	github.com/alecthomas/repr v0.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/containerd/containerd v1.7.11 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/cpuguy83/dockercfg v0.3.1 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker v24.0.7+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -30,8 +31,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.4.0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
