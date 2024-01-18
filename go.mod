@@ -3,7 +3,7 @@ module github.com/birdayz/kstreams
 go 1.21
 
 require (
-	github.com/alecthomas/assert/v2 v2.4.1
+	github.com/alecthomas/assert/v2 v2.5.0
 	github.com/twmb/franz-go v1.15.4
 	github.com/twmb/franz-go/pkg/kadm v1.10.0
 	github.com/twmb/franz-go/pkg/kmsg v1.7.0
