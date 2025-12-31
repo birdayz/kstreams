@@ -22,6 +22,10 @@ type TaskManager struct {
 	topology *Topology
 
 	pgs []*PartitionGroup
+
+	// State management configuration
+	appID    string
+	stateDir string
 }
 
 type pgPartitions struct {
@@ -103,7 +107,7 @@ func (t *TaskManager) Assigned(assigned map[string][]int32) error {
 
 	for _, pg := range matchingPGs {
 		for _, partition := range pg.partitions {
-			task, err := t.topology.CreateTask(pg.partitionGroup.sourceTopics, partition, t.client)
+			task, err := t.topology.CreateTask(pg.partitionGroup.sourceTopics, partition, t.client, t.appID, t.stateDir)
 			if err != nil {
 				return fmt.Errorf("failed to create task: %w", err)
 			}
@@ -150,9 +154,30 @@ func (t *TaskManager) Revoked(revoked map[string][]int32) error {
 	return nil
 }
 
+// GetCommittableOffsets returns all committable offsets from all tasks
+// without actually committing them. Used for transactional commits.
+func (t *TaskManager) GetCommittableOffsets() map[string]map[int32]kgo.EpochOffset {
+	data := map[string]map[int32]kgo.EpochOffset{}
+
+	for _, task := range t.tasks {
+		commit := task.GetOffsetsToCommit()
+		for topic, offset := range commit {
+			if _, ok := data[topic]; !ok {
+				data[topic] = make(map[int32]kgo.EpochOffset)
+			}
+			data[topic][task.partition] = kgo.EpochOffset{Epoch: offset.Epoch, Offset: offset.Offset}
+		}
+	}
+
+	return data
+}
+
 // Commit triggers a commit. This flushes all tasks' stores, and then
 // performs a commit of all tasks' processed records.
+// CRITICAL: After successful offset commit, checkpoints state to prevent data loss on crash
+// Matches Kafka Streams' TaskManager.commit() -> task.postCommit() -> checkpoint()
 func (t *TaskManager) Commit(ctx context.Context) error {
+	// Phase 1: Flush all stores and sinks
 	for _, task := range t.tasks {
 		if err := task.Flush(ctx); err != nil {
 			return err
@@ -160,8 +185,22 @@ func (t *TaskManager) Commit(ctx context.Context) error {
 		t.log.Info("Flushed task", "task", task)
 	}
 
+	// Phase 2: Commit offsets to broker
 	if err := t.commit(ctx); err != nil {
 		return err
+	}
+
+	// Phase 3: CRITICAL - Write checkpoints after successful commit
+	// This ensures checkpoint reflects committed offsets
+	// On restart, we'll resume from checkpoint (not from beginning)
+	for _, task := range t.tasks {
+		if err := task.Checkpoint(ctx); err != nil {
+			t.log.Error("Failed to checkpoint task", "task", task, "error", err)
+			// Don't fail the commit if checkpoint fails - offsets are already committed
+			// This matches Kafka Streams behavior: checkpoint errors are logged but not thrown
+		} else {
+			t.log.Debug("Checkpointed task", "task", task)
+		}
 	}
 
 	t.log.Info("Committed all tasks")
@@ -169,18 +208,7 @@ func (t *TaskManager) Commit(ctx context.Context) error {
 }
 
 func (t *TaskManager) commit(ctx context.Context) error {
-	data := map[string]map[int32]kgo.EpochOffset{}
-
-	for _, task := range t.tasks {
-		commit := task.GetOffsetsToCommit()
-		for topic, offset := range commit {
-			// need p
-			if _, ok := data[topic]; !ok {
-				data[topic] = make(map[int32]kgo.EpochOffset)
-			}
-			data[topic][task.partition] = kgo.EpochOffset{Epoch: offset.Epoch, Offset: offset.Offset}
-		}
-	}
+	data := t.GetCommittableOffsets()
 	errCh := make(chan error, 1)
 
 	t.client.CommitOffsetsSync(context.Background(), data, func(c *kgo.Client, ocr1 *kmsg.OffsetCommitRequest, ocr2 *kmsg.OffsetCommitResponse, e error) {

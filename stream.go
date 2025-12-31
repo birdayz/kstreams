@@ -23,6 +23,11 @@ type App struct {
 	eg *errgroup.Group
 
 	commitInterval time.Duration
+
+	eosConfig EOSConfig
+
+	// State management
+	stateDir string
 }
 
 var WithWorkersCount = func(n int) Option {
@@ -49,6 +54,12 @@ var WithCommitInterval = func(commitInterval time.Duration) Option {
 	}
 }
 
+var WithStateDir = func(stateDir string) Option {
+	return func(s *App) {
+		s.stateDir = stateDir
+	}
+}
+
 type NullWriter struct{}
 
 func (NullWriter) Write([]byte) (int, error) { return 0, nil }
@@ -66,6 +77,7 @@ func New(t *Topology, groupName string, opts ...Option) *App {
 		routines:       []*Worker{},
 		log:            NullLogger(),
 		commitInterval: time.Second * 5,
+		stateDir:       "/tmp/kstreams-state", // Default state directory
 	}
 
 	for _, opt := range opts {
@@ -87,7 +99,10 @@ func (c *App) Run() error {
 			c.t,
 			c.groupName,
 			c.brokers,
-			c.commitInterval)
+			c.commitInterval,
+			c.eosConfig,
+			c.groupName, // appID = groupName
+			c.stateDir)
 		if err != nil {
 			return err
 		}

@@ -55,6 +55,14 @@ type Worker struct {
 	commitInterval       time.Duration
 
 	err error
+
+	eosConfig EOSConfig
+	// For full EOS with atomic offset commits
+	session *kgo.GroupTransactSession
+
+	// State management configuration
+	appID    string
+	stateDir string
 }
 
 type AssignedOrRevoked struct {
@@ -63,21 +71,25 @@ type AssignedOrRevoked struct {
 }
 
 // Config
-func NewWorker(log *slog.Logger, name string, t *Topology, group string, brokers []string, commitInterval time.Duration) (*Worker, error) {
+func NewWorker(log *slog.Logger, name string, t *Topology, group string, brokers []string, commitInterval time.Duration, eosConfig EOSConfig, appID string, stateDir string) (*Worker, error) {
 	tm := &TaskManager{
 		tasks:    []*Task{},
 		log:      log,
 		topology: t,
-		pgs:      t.partitionGroups(),
+		pgs:      t.getPartitionGroups(),
+		appID:    appID,
+		stateDir: stateDir,
 	}
 
 	par := make(chan AssignedOrRevoked)
 
 	topics := t.GetTopics()
-	client, err := kgo.NewClient(
+
+	// Consumer configuration
+	consumerOpts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		kgo.Balancers(NewPartitionGroupBalancer(log, t.partitionGroups())),
+		kgo.Balancers(NewPartitionGroupBalancer(log, t.getPartitionGroups())),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
 		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
@@ -86,9 +98,43 @@ func NewWorker(log *slog.Logger, name string, t *Topology, group string, brokers
 		kgo.OnPartitionsRevoked(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
 			par <- AssignedOrRevoked{Revoked: m}
 		}),
-	)
-	if err != nil {
-		return nil, err
+	}
+
+	var client *kgo.Client
+	var session *kgo.GroupTransactSession
+
+	// If EOS is enabled, use GroupTransactSession for atomic offset commits
+	if eosConfig.Enabled {
+		consumerOpts = append(consumerOpts, kgo.FetchIsolationLevel(kgo.ReadCommitted()))
+
+		// Add transactional ID for this worker
+		transactionalID := fmt.Sprintf("%s-%s", eosConfig.TransactionalID, name)
+		consumerOpts = append(consumerOpts,
+			kgo.TransactionalID(transactionalID),
+			kgo.RequireStableFetchOffsets(), // Recommended for Kafka 2.5+ EOS
+		)
+
+		// Create GroupTransactSession for full EOS with atomic offset commits
+		var err error
+		session, err = kgo.NewGroupTransactSession(consumerOpts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create group transact session: %w", err)
+		}
+
+		// Get underlying client for admin operations and task manager
+		client = session.Client()
+
+		log.Info("Exactly-once semantics enabled (full EOS)",
+			"transactional_id", transactionalID,
+			"isolation_level", "read_committed",
+			"atomic_offset_commits", true)
+	} else {
+		// Non-EOS: use regular client
+		var err error
+		client, err = kgo.NewClient(consumerOpts...)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tm.client = client
@@ -106,7 +152,12 @@ func NewWorker(log *slog.Logger, name string, t *Topology, group string, brokers
 		maxPollRecords:    10000,
 		taskManager:       tm,
 		commitInterval:    commitInterval,
+		eosConfig:         eosConfig,
+		session:           session, // nil for non-EOS
+		appID:             appID,
+		stateDir:          stateDir,
 	}
+
 	w.closed.Add(1)
 	return w, nil
 }
@@ -141,22 +192,49 @@ func (r *Worker) handleRunning() {
 	default:
 	}
 
+	// Begin transaction if EOS is enabled (using GroupTransactSession)
+	if r.eosConfig.Enabled {
+		if err := r.session.Begin(); err != nil {
+			r.log.Error("failed to begin transaction", "error", err)
+			r.changeState(StateCloseRequested)
+			r.err = err
+			r.cancelPollMtx.Unlock()
+			return
+		}
+	}
+
 	pollCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	r.cancelPoll = cancel
 
 	r.cancelPollMtx.Unlock()
 
+	// Track if we need to abort transaction on error
+	processingError := false
+
 	r.log.Debug("Polling Records")
-	f := r.client.PollRecords(pollCtx, r.maxPollRecords)
+	// Use session.PollRecords() for EOS, client.PollRecords() for non-EOS
+	var f kgo.Fetches
+	if r.eosConfig.Enabled {
+		f = r.session.PollRecords(pollCtx, r.maxPollRecords)
+	} else {
+		f = r.client.PollRecords(pollCtx, r.maxPollRecords)
+	}
 	r.log.Debug("Polled Records")
 
 	if f.IsClientClosed() {
 		r.changeState(StateCloseRequested)
+		if r.eosConfig.Enabled {
+			// Session will abort automatically on close
+			_, _ = r.session.End(context.Background(), kgo.TryAbort)
+		}
 		return
 	}
 
 	if errors.Is(f.Err(), context.Canceled) {
+		if r.eosConfig.Enabled {
+			_, _ = r.session.End(context.Background(), kgo.TryAbort)
+		}
 		return
 	}
 
@@ -165,35 +243,40 @@ func (r *Worker) handleRunning() {
 			if errors.Is(fetchError.Err, context.DeadlineExceeded) {
 				continue
 			}
-			r.log.Error("fetch error", fetchError.Err, "topic", fetchError.Topic, "partition", fetchError.Partition)
+			r.log.Error("fetch error", "error", fetchError.Err, "topic", fetchError.Topic, "partition", fetchError.Partition)
 			if fetchError.Err != nil {
 				r.err = fmt.Errorf("fetch error on topic %s, partition %d: %w", fetchError.Topic, fetchError.Partition, fetchError.Err)
 				r.changeState(StateCloseRequested)
+				if r.eosConfig.Enabled {
+					_, _ = r.session.End(context.Background(), kgo.TryAbort)
+				}
 				return
 			}
 		}
 
 		f.EachPartition(func(fetch kgo.FetchTopicPartition) {
-			r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition)
+			if processingError {
+				return // Skip if we already had an error
+			}
+
+			r.log.Info("Processing", "topic", fetch.Topic, "partition", fetch.Partition, "len", len(fetch.Records))
 			task, err := r.taskManager.TaskFor(fetch.Topic, fetch.Partition)
 			if err != nil {
-				r.log.Error("failed to lookup task", err, "topic", fetch.Topic, "partition", fetch.Partition)
+				r.log.Error("failed to lookup task", "error", err, "topic", fetch.Topic, "partition", fetch.Partition)
 				r.changeState(StateCloseRequested)
+				processingError = true
 				return
 			}
 
-			count := 0
-
 			for _, record := range fetch.Records {
-				count++
-
 				recordCtx, cancel := context.WithTimeout(context.Background(), time.Second*60) // TODO make this configurable
 				err := task.Process(recordCtx, record)
 				cancel()
 				if err != nil {
-					r.log.Error("Failed to process record", err) // TODO - provide middlewares to handle this error. is it always a user code error?
+					r.log.Error("Failed to process record", "error", err) // TODO - provide middlewares to handle this error. is it always a user code error?
 					r.changeState(StateCloseRequested)
 					r.err = err
+					processingError = true
 					return
 				}
 			}
@@ -203,15 +286,94 @@ func (r *Worker) handleRunning() {
 
 	}
 
-	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	if err := r.maybeCommit(commitCtx); err != nil {
-		r.log.Error("failed to commit", err)
-		r.changeState(StateCloseRequested)
-		r.err = err
+	// If there was a processing error, abort transaction and return
+	if processingError {
+		if r.eosConfig.Enabled {
+			endCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+			committed, err := r.session.End(endCtx, kgo.TryAbort)
+			if err != nil {
+				r.log.Error("failed to end transaction (abort)", "error", err)
+			} else if !committed {
+				r.log.Info("Transaction aborted due to processing error")
+			}
+		}
 		return
 	}
-	r.log.Info("Committed offests")
+
+	commitCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	// Commit with or without transaction depending on EOS config
+	if r.eosConfig.Enabled {
+		// Use session.End() for atomic transaction + offset commit
+		if err := r.commitWithTransactionSession(commitCtx); err != nil {
+			r.log.Error("failed to commit transaction", "error", err)
+			r.changeState(StateCloseRequested)
+			r.err = err
+			return
+		}
+		r.log.Info("Transaction and offsets committed atomically")
+	} else {
+		if err := r.maybeCommit(commitCtx); err != nil {
+			r.log.Error("failed to commit", "error", err)
+			r.changeState(StateCloseRequested)
+			r.err = err
+			return
+		}
+		r.log.Info("Committed offsets")
+	}
+}
+
+// commitWithTransactionSession commits transaction and offsets atomically using GroupTransactSession
+// This achieves true exactly-once semantics with atomic offset commits
+func (r *Worker) commitWithTransactionSession(ctx context.Context) error {
+	// Flush tasks (state stores) before committing transaction
+	for _, task := range r.taskManager.tasks {
+		if err := task.Flush(ctx); err != nil {
+			// If flush fails, abort the transaction
+			_, _ = r.session.End(ctx, kgo.TryAbort)
+			return fmt.Errorf("failed to flush task: %w", err)
+		}
+	}
+
+	// session.End() does three things atomically:
+	// 1. Flushes the producer (ensures all records are sent)
+	// 2. Commits the transaction (makes produced records visible)
+	// 3. Commits consumer offsets within the transaction
+	//
+	// If the group rebalanced since Begin(), this will abort instead of commit
+	committed, err := r.session.End(ctx, kgo.TryCommit)
+	if err != nil {
+		return fmt.Errorf("failed to end transaction: %w", err)
+	}
+
+	if !committed {
+		// Transaction was aborted (likely due to rebalance)
+		return fmt.Errorf("transaction aborted (likely due to rebalance)")
+	}
+
+	// CRITICAL: Checkpoint after successful EOS commit
+	// This is essential for EOS - without it:
+	// 1. Checkpoint is never written during processing
+	// 2. On restart, full restoration from beginning (massive delay)
+	// 3. Violates Kafka Streams' EOS checkpoint semantics
+	//
+	// Matches Kafka Streams' StreamTask.postCommit() in EOS mode
+	for _, task := range r.taskManager.tasks {
+		if err := task.Checkpoint(ctx); err != nil {
+			r.log.Error("Failed to checkpoint task after EOS commit",
+				"task", task,
+				"error", err)
+			// Log but don't fail - transaction is already committed
+			// This matches Kafka Streams behavior
+		} else {
+			r.log.Debug("Checkpointed task after EOS commit", "task", task)
+		}
+	}
+
+	r.lastSuccessfulCommit = time.Now()
+	return nil
 }
 
 func (r *Worker) maybeCommit(ctx context.Context) error {
@@ -235,11 +397,11 @@ func (r *Worker) handleClosed() {
 
 func (r *Worker) handlePartitionsAssigned() {
 	if err := r.taskManager.Revoked(r.newlyRevoked); err != nil {
-		r.log.Error("revoked failed", err)
+		r.log.Error("revoked failed", "error", err)
 	}
 
 	if err := r.taskManager.Assigned(r.newlyAssigned); err != nil {
-		r.log.Error("assigned failed", err)
+		r.log.Error("assigned failed", "error", err)
 		r.changeState(StateCloseRequested)
 		return
 	}
@@ -258,11 +420,15 @@ func (r *Worker) handleCloseRequested() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	if err := r.client.Flush(context.TODO()); err != nil {
-		r.log.Error("Failed to flush client", err)
-	}
-	if err := r.taskManager.Commit(context.TODO()); err != nil {
-		r.log.Error("Failed to commit", err)
+	// For EOS, session manages flush and commit
+	// For non-EOS, manually flush and commit
+	if !r.eosConfig.Enabled {
+		if err := r.client.Flush(context.TODO()); err != nil {
+			r.log.Error("Failed to flush client", "error", err)
+		}
+		if err := r.taskManager.Commit(context.TODO()); err != nil {
+			r.log.Error("Failed to commit", "error", err)
+		}
 	}
 
 	go func() {
@@ -275,10 +441,16 @@ func (r *Worker) handleCloseRequested() {
 
 	err := r.taskManager.Close(context.TODO())
 	if err != nil {
-		r.log.Error("Failed to close tasks", err)
+		r.log.Error("Failed to close tasks", "error", err)
 	}
 
-	r.client.Close()
+	// Close session (for EOS) or client (for non-EOS)
+	if r.eosConfig.Enabled && r.session != nil {
+		r.session.Close()
+	} else {
+		r.client.Close()
+	}
+
 	close(r.assignedOrRevoked) // Can close this only after client is closed, as the client writer to that channel
 	wg.Wait()
 	r.changeState(StateClosed)

@@ -2,28 +2,40 @@ package kstreams
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-type Nexter[K, V any] interface {
-	AddNext(InputProcessor[K, V])
-}
-
 type TopologyBuilder struct {
-	processors map[string]*TopologyProcessor
-	stores     map[string]*TopologyStore
+	// Use new TopologyGraph internally
+	graph *TopologyGraph
 
-	// Key = TopicNode
-	sources map[string]*TopologySource
-	sinks   map[string]*TopologySink
+	// OLD architecture - being removed
+	processors map[string]*TopologyProcessor
+	// stores     map[string]*TopologyStore // REMOVED
+	sources    map[string]*TopologySource
+	sinks      map[string]*TopologySink
 }
 
 func (tb *TopologyBuilder) Build() (*Topology, error) {
-	// TODO Validate for cycles, build partition group once,...
+	// Validate the graph (includes cycle detection!)
+	if err := tb.graph.Validate(); err != nil {
+		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Compute partition groups deterministically
+	partitionGroups, err := tb.graph.ComputePartitionGroups()
+	if err != nil {
+		return nil, fmt.Errorf("partition groups: %w", err)
+	}
+
 	return &Topology{
+		graph:           tb.graph,
+		partitionGroups: partitionGroups,
+		// OLD architecture
 		sources:    tb.sources,
-		stores:     tb.stores,
+		// stores:     tb.stores, // REMOVED
 		processors: tb.processors,
 		sinks:      tb.sinks,
 	}, nil
@@ -52,17 +64,15 @@ func ContainsAny[E comparable](s []E, v []E) bool {
 
 func NewTopologyBuilder() *TopologyBuilder {
 	return &TopologyBuilder{
+		graph:      NewTopologyGraph(),
 		processors: map[string]*TopologyProcessor{},
-		stores:     map[string]*TopologyStore{},
+		// stores:     map[string]*TopologyStore{}, // REMOVED
 		sources:    map[string]*TopologySource{},
 		sinks:      map[string]*TopologySink{},
 	}
 }
 
-type TopologyStore struct {
-	Name  string
-	Build StoreBuilder
-}
+// TopologyStore - REMOVED, use StoreBuilder[StateStore] instead
 
 type TopologySink struct {
 	Name    string
@@ -79,7 +89,7 @@ type TopologyProcessor struct {
 
 type TopologySource struct {
 	Name           string
-	Build          func() RecordProcessor
+	Build          func() RawRecordProcessor
 	ChildNodeNames []string
 	AddChildFunc   func(parent any, child any, childName string) // TODO - possible to do w/o parent ?
 }
@@ -89,9 +99,30 @@ func MustRegisterSource[K, V any](t *TopologyBuilder, name string, topic string,
 }
 
 func RegisterSource[K, V any](t *TopologyBuilder, name string, topic string, keyDeserializer Deserializer[K], valueDeserializer Deserializer[V]) error {
+	nodeID := NodeID(name)
+
+	// Check for duplicates in new graph
+	if _, exists := t.graph.nodes[nodeID]; exists {
+		return ErrNodeAlreadyExists
+	}
+
+	// Create new graph node using type-safe builder
+	builder := &SourceNodeBuilder[K, V]{
+		nodeID:            nodeID,
+		topic:             topic,
+		keyDeserializer:   keyDeserializer,
+		valueDeserializer: valueDeserializer,
+	}
+
+	graphNode := builder.ToGraphNode()
+	t.graph.nodes[nodeID] = graphNode
+	t.graph.sources[topic] = nodeID
+	t.graph.nodeOrder = append(t.graph.nodeOrder, nodeID) // Track insertion order!
+
+	// Also keep old topology source for backward compatibility
 	topoSource := &TopologySource{
 		Name: name,
-		Build: func() RecordProcessor {
+		Build: func() RawRecordProcessor {
 			return &SourceNode[K, V]{KeyDeserializer: keyDeserializer, ValueDeserializer: valueDeserializer}
 		},
 		AddChildFunc: func(parent, child any, childName string) {
@@ -132,6 +163,44 @@ func MustRegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySeria
 }
 
 func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerializer Serializer[K], valueSerializer Serializer[V], parent string) error {
+	nodeID := NodeID(name)
+	parentID := NodeID(parent)
+
+	// Check for duplicates in new graph
+	if _, exists := t.graph.nodes[nodeID]; exists {
+		return ErrNodeAlreadyExists
+	}
+
+	// Validate parent exists in new graph
+	parentNode, ok := t.graph.nodes[parentID]
+	if !ok {
+		return ErrNodeNotFound
+	}
+
+	// Create new graph node using type-safe builder
+	builder := &SinkNodeBuilder[K, V]{
+		nodeID:          nodeID,
+		topic:           topic,
+		keySerializer:   keySerializer,
+		valueSerializer: valueSerializer,
+	}
+
+	graphNode := builder.ToGraphNode()
+
+	// Validate type compatibility
+	if err := parentNode.ValidateDownstream(graphNode); err != nil {
+		return fmt.Errorf("type mismatch connecting %s -> %s: %w", parent, name, err)
+	}
+
+	// Add to graph
+	t.graph.nodes[nodeID] = graphNode
+	t.graph.nodeOrder = append(t.graph.nodeOrder, nodeID)
+
+	// Connect parent -> child in new graph
+	parentNode.Children = append(parentNode.Children, nodeID)
+	graphNode.Parents = append(graphNode.Parents, parentID)
+
+	// Also keep old topology sink for backward compatibility
 	topoSink := &TopologySink{
 		Name: name,
 		Builder: func(client *kgo.Client) Flusher {
@@ -139,7 +208,6 @@ func RegisterSink[K, V any](t *TopologyBuilder, name, topic string, keySerialize
 		},
 	}
 
-	// t.processors[name] = topoProcessor
 	t.sinks[name] = topoSink
 
 	return SetParent(t, parent, name)
@@ -150,6 +218,50 @@ func MustRegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Proce
 }
 
 func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p ProcessorBuilder[Kin, Vin, Kout, Vout], name string, parent string, stores ...string) error {
+	nodeID := NodeID(name)
+	parentID := NodeID(parent)
+
+	// Check for duplicates in new graph
+	if _, exists := t.graph.nodes[nodeID]; exists {
+		return ErrNodeAlreadyExists
+	}
+
+	// Validate parent exists in new graph
+	parentNode, ok := t.graph.nodes[parentID]
+	if !ok {
+		return ErrNodeNotFound
+	}
+
+	// Validate stores exist
+	for _, storeName := range stores {
+		if _, ok := t.graph.stores[storeName]; !ok {
+			return errors.New("store not found")
+		}
+	}
+
+	// Create new graph node using type-safe builder
+	builder := &ProcessorNodeBuilder[Kin, Vin, Kout, Vout]{
+		nodeID:        nodeID,
+		processorFunc: p,
+		storeNames:    stores,
+	}
+
+	graphNode := builder.ToGraphNode()
+
+	// Validate type compatibility
+	if err := parentNode.ValidateDownstream(graphNode); err != nil {
+		return fmt.Errorf("type mismatch connecting %s -> %s: %w", parent, name, err)
+	}
+
+	// Add to graph
+	t.graph.nodes[nodeID] = graphNode
+	t.graph.nodeOrder = append(t.graph.nodeOrder, nodeID)
+
+	// Connect parent -> child in new graph
+	parentNode.Children = append(parentNode.Children, nodeID)
+	graphNode.Parents = append(graphNode.Parents, parentID)
+
+	// Also keep old topology processor for backward compatibility
 	topoProcessor := &TopologyProcessor{
 		Name: name,
 		Build: func(stores map[string]Store) Node {
@@ -167,16 +279,12 @@ func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Processor
 		StoreNames:     stores,
 	}
 
-	// TODO validate store names, existence ?
-
 	topoProcessor.AddChildFunc = func(parent any, child any, childName string) {
-		// TODO: try to detect these already when building the topology.
 		parentNode, ok := parent.(*ProcessorNode[Kin, Vin, Kout, Vout])
 		if !ok {
 			panic("type error")
 		}
 
-		// TODO: try to detect these already when building the topology.
 		childNode, ok := child.(InputProcessor[Kout, Vout])
 		if !ok {
 			panic("type error")
@@ -189,15 +297,7 @@ func RegisterProcessor[Kin, Vin, Kout, Vout any](t *TopologyBuilder, p Processor
 		return ErrNodeAlreadyExists
 	}
 
-	// how to add to processor context the stores?
-
 	t.processors[name] = topoProcessor
-
-	for _, store := range stores {
-		if _, ok := t.stores[store]; !ok {
-			return errors.New("store not found")
-		}
-	}
 
 	return SetParent(t, parent, name)
 }
@@ -220,6 +320,39 @@ func SetParent(t *TopologyBuilder, parent, child string) error {
 	}
 
 	return ErrNodeNotFound
+}
+
+// RegisterRecordProcessor registers an enhanced processor that receives full Record objects
+// with metadata (headers, timestamps, offsets, etc.)
+func RegisterRecordProcessor[Kin, Vin, Kout, Vout any](
+	t *TopologyBuilder,
+	processorBuilder func() RecordProcessor[Kin, Vin, Kout, Vout],
+	name string,
+	parent string,
+	stores ...string,
+) error {
+	// For now, enhanced RecordProcessors are registered the same way as legacy processors
+	// The dual-interface support in RuntimeProcessorNode will handle the difference
+	// This is a placeholder for future full integration
+	// TODO: Create proper RecordProcessor builders in dag_builders.go
+	return errors.New("RegisterRecordProcessor: full integration pending - use RegisterProcessor for now")
+}
+
+// RegisterRecordProcessorWithInterceptors registers an enhanced processor with interceptors
+func RegisterRecordProcessorWithInterceptors[Kin, Vin, Kout, Vout any](
+	t *TopologyBuilder,
+	processorBuilder func() RecordProcessor[Kin, Vin, Kout, Vout],
+	name string,
+	parent string,
+	interceptors []ProcessorInterceptor[Kin, Vin],
+	stores ...string,
+) error {
+	// Wrap processor with interceptors
+	wrappedBuilder := func() RecordProcessor[Kin, Vin, Kout, Vout] {
+		return WithInterceptors(processorBuilder(), interceptors...)
+	}
+
+	return RegisterRecordProcessor(t, wrappedBuilder, name, parent, stores...)
 }
 
 var ErrNodeAlreadyExists = errors.New("node exists already")

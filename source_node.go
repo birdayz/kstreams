@@ -6,7 +6,9 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-type RecordProcessor interface {
+// RawRecordProcessor processes raw kgo.Record objects
+// This is used internally for source nodes
+type RawRecordProcessor interface {
 	Process(ctx context.Context, m *kgo.Record) error
 }
 

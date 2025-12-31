@@ -1,9 +1,6 @@
 package kstreams
 
 import (
-	"errors"
-	"fmt"
-
 	"slices"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -11,18 +8,25 @@ import (
 
 // Topology is a fully built DAG that can be used in a kstreams app.
 type Topology struct {
+	// Graph-based implementation
+	graph           *TopologyGraph
+	partitionGroups []*PartitionGroup
+
+	// OLD architecture - being removed
+	// stores     map[string]*TopologyStore
 	sources    map[string]*TopologySource
-	stores     map[string]*TopologyStore
 	processors map[string]*TopologyProcessor
 	sinks      map[string]*TopologySink
 }
 
 func (t *Topology) GetTopics() []string {
-	var res []string
-	for k := range t.sources {
-		res = append(res, k)
+	// Use new graph for deterministic ordering
+	topics := make([]string, 0, len(t.graph.sources))
+	for topic := range t.graph.sources {
+		topics = append(topics, topic)
 	}
-	return res
+	slices.Sort(topics) // DETERMINISTIC!
+	return topics
 }
 
 // PartitionGroup is a sub-graph of nodes that must be co-partitioned as they depend on each other.
@@ -32,43 +36,10 @@ type PartitionGroup struct {
 	storeNames     []string
 }
 
-func (t *Topology) partitionGroups() []*PartitionGroup {
-	var pgs []*PartitionGroup
-
-	// 1. Create single-topic partition groups by traversing the graph, starting
-	// at each source.
-	for topic := range t.sources { // TODO: make this deterministic, ordering of keys is random
-
-		processors := t.findAllProcessors(topic)
-
-		// Add all state stores attached to these processors
-		var storeNames []string
-		for _, child := range processors {
-			if store, ok := t.processors[child]; ok {
-				storeNames = append(storeNames, store.StoreNames...)
-			}
-		}
-
-		pg := &PartitionGroup{
-			sourceTopics:   []string{topic},
-			processorNames: processors,
-			storeNames:     storeNames,
-		}
-
-		pgs = append(pgs, pg)
-	}
-
-	// 2. Merge these single-partition PartitionGroups, so all overlaps of graph
-	// nodes result are in the same PartitionGroup.
-	pgs = mergePartitionGroups(pgs)
-
-	for _, pg := range pgs {
-		slices.Sort(pg.sourceTopics)
-		slices.Sort(pg.processorNames)
-		slices.Sort(pg.storeNames)
-	}
-
-	return pgs
+func (t *Topology) getPartitionGroups() []*PartitionGroup {
+	// Use precomputed partition groups from the new graph
+	// These are computed deterministically during Build()
+	return t.partitionGroups
 }
 
 func (t *Topology) findAllProcessors(source string) []string {
@@ -87,132 +58,10 @@ func (t *Topology) findAllProcessors(source string) []string {
 	return res
 }
 
-func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Client) (*Task, error) {
-	var srcs []*TopologySource
-
-	for _, topic := range topics {
-		src, ok := t.sources[topic]
-		if !ok {
-			return nil, errors.New("no source found")
-		}
-		srcs = append(srcs, src)
-	}
-
-	stores := map[string]Store{}
-	for name, store := range t.stores {
-		builtStore, err := store.Build(name, partition)
-		if err != nil {
-			return nil, fmt.Errorf("failed to build store: %w", err)
-		}
-		stores[name] = builtStore
-	}
-
-	builtProcessors := map[string]Node{}
-
-	// This includes sink nodes. Should be refactored to not include sink nodes, so we treat these completely separately.
-	var neededProcessors []string
-	for _, src := range srcs {
-		neededProcessors = append(neededProcessors, childNodes(t, src.Name, src.ChildNodeNames...)...)
-	}
-	neededProcessors = slices.Compact(neededProcessors)
-
-	builtSinks := map[string]Flusher{}
-
-	for _, pr := range neededProcessors {
-		topoProcessor, ok := t.processors[pr]
-		if ok {
-			built := topoProcessor.Build(stores)
-
-			builtProcessors[topoProcessor.Name] = built
-		} else {
-			topoSink, ok := t.sinks[pr]
-			if !ok {
-				_, ok := t.sources[pr]
-				if !ok {
-					return nil, fmt.Errorf("could not find node: %s", pr)
-				}
-			} else {
-				sink := topoSink.Builder(client)
-				builtSinks[topoSink.Name] = sink
-			}
-		}
-	}
-
-	builtSources := make(map[string]RecordProcessor)
-	for _, topic := range topics {
-		builtSources[topic] = t.sources[topic].Build()
-	}
-
-	for name, builtSource := range builtSources {
-		node := t.sources[name]
-
-		for _, childNodeName := range node.ChildNodeNames {
-			childNode, ok := t.processors[childNodeName]
-			if ok {
-				child, ok := builtProcessors[childNode.Name]
-				if !ok {
-					return nil, fmt.Errorf("processor [%s] not found", childNode.Name)
-				}
-				node.AddChildFunc(builtSource, child, childNode.Name)
-			} else {
-				childSink, ok := t.sinks[childNodeName]
-				if !ok {
-					return nil, fmt.Errorf("could not find child node %s", childNodeName)
-				}
-
-				child, ok := builtSinks[childSink.Name]
-				if !ok {
-					return nil, fmt.Errorf("could not find child node %s", childNodeName)
-				}
-
-				node.AddChildFunc(builtSource, child, childSink.Name)
-
-			}
-
-		}
-	}
-
-	// Link sub-processors
-	for k, builtProcessor := range builtProcessors {
-		node := t.processors[k]
-
-		for _, childNodeName := range node.ChildNodeNames {
-			childNode, ok := t.processors[childNodeName]
-			if ok {
-
-				child, ok := builtProcessors[childNode.Name]
-				if !ok {
-					return nil, fmt.Errorf("processor %s not found", childNode.Name)
-				}
-				node.AddChildFunc(builtProcessor, child, childNode.Name)
-			} else {
-				childSink, ok := t.sinks[childNodeName]
-				if !ok {
-					return nil, fmt.Errorf("could not find child node %s", childNodeName)
-				}
-
-				child, ok := builtSinks[childSink.Name]
-				if !ok {
-					return nil, fmt.Errorf("could not find child node %s", childNodeName)
-				}
-
-				node.AddChildFunc(builtProcessor, child, childSink.Name)
-			}
-		}
-	}
-
-	processorStores := make(map[string][]string)
-	for _, processorName := range neededProcessors {
-		// processorStores[processorName] = t.processors[processorName].ChildNodeNames
-		proc, ok := t.processors[processorName]
-		if ok {
-			processorStores[processorName] = proc.StoreNames
-		}
-	}
-
-	task := NewTask(topics, partition, builtSources, stores, builtProcessors, builtSinks, processorStores)
-	return task, nil
-
+func (t *Topology) CreateTask(topics []string, partition int32, client *kgo.Client, appID string, stateDir string) (*Task, error) {
+	// Delegate to the new graph's simplified BuildTask method
+	// This replaces the old 125-line multi-pass construction with a clean 2-pass approach
+	return t.graph.BuildTask(topics, partition, client, appID, stateDir)
 }
 
 // appendChildren gets a list of all node names of the given processor (?)

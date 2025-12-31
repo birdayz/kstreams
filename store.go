@@ -9,99 +9,113 @@ var (
 	ErrKeyNotFound = errors.New("store: key not found")
 )
 
-func RegisterStore(t *TopologyBuilder, storeBuilder StoreBuilder, name string) {
-	t.stores[name] = &TopologyStore{
-		Name:  name,
-		Build: storeBuilder,
-	}
+// StateStore is the base interface for all state stores
+// Matches Kafka Streams' org.apache.kafka.streams.processor.StateStore
+type StateStore interface {
+	// Name returns the store name
+	Name() string
+
+	// Init initializes the store with processor context
+	Init(ctx ProcessorContextInternal) error
+
+	// Flush persists any cached data
+	Flush(ctx context.Context) error
+
+	// Close closes the store
+	Close() error
+
+	// Persistent returns true if the store persists data to disk
+	// Returns false for in-memory stores
+	// CRITICAL: Only persistent stores should be checkpointed
+	// Matches Kafka Streams' StateStore.persistent()
+	Persistent() bool
 }
 
-func KVStore[K, V any](storeBuilder func(name string, p int32) (StoreBackend, error), keySerde SerDe[K], valueSerde SerDe[V]) func(name string, p int32) (Store, error) {
-	return func(name string, p int32) (Store, error) {
-		backend, err := storeBuilder(name, p)
-		if err != nil {
-			return nil, err
-		}
-		return NewKeyValueStore(backend, keySerde.Serializer, valueSerde.Serializer, keySerde.Deserializer, valueSerde.Deserializer), nil
-	}
+// KeyValueStore is a key-value state store interface
+// Matches Kafka Streams' org.apache.kafka.streams.state.KeyValueStore
+type KeyValueStore[K comparable, V any] interface {
+	StateStore
+
+	// Get retrieves a value by key
+	// Returns (value, true, nil) if found
+	// Returns (zero, false, nil) if not found
+	// Returns (zero, false, err) on error
+	Get(ctx context.Context, key K) (V, bool, error)
+
+	// Set stores a key-value pair
+	Set(ctx context.Context, key K, value V) error
+
+	// Delete removes a key
+	Delete(ctx context.Context, key K) error
+
+	// Range returns an iterator over a range of keys [from, to)
+	Range(ctx context.Context, from, to K) (KeyValueIterator[K, V], error)
+
+	// All returns an iterator over all keys
+	All(ctx context.Context) (KeyValueIterator[K, V], error)
 }
 
-func NewKeyValueStore[K, V any](
-	store StoreBackend,
-	keySerializer Serializer[K],
-	valueSerializer Serializer[V],
-	keyDeserializer Deserializer[K],
-	valueDeserializer Deserializer[V],
-) *KeyValueStore[K, V] {
-	return &KeyValueStore[K, V]{
-		store:             store,
-		keySerializer:     keySerializer,
-		valueSerializer:   valueSerializer,
-		keyDeserializer:   keyDeserializer,
-		valueDeserializer: valueDeserializer,
-	}
+// BatchKeyValueStore extends KeyValueStore with batch operations
+// kstreams-specific (not in Kafka Streams)
+type BatchKeyValueStore[K comparable, V any] interface {
+	KeyValueStore[K, V]
+
+	// SetBatch stores multiple key-value pairs atomically
+	SetBatch(ctx context.Context, entries []KV[K, V]) error
+
+	// GetBatch retrieves multiple values by keys
+	GetBatch(ctx context.Context, keys []K) ([]KV[K, V], error)
+
+	// DeleteBatch removes multiple keys atomically
+	DeleteBatch(ctx context.Context, keys []K) error
 }
 
-type KeyValueStore[K, V any] struct {
-	store             StoreBackend
-	keySerializer     Serializer[K]
-	valueSerializer   Serializer[V]
-	keyDeserializer   Deserializer[K]
-	valueDeserializer Deserializer[V]
+// KeyValueIterator is an iterator over key-value pairs
+// Matches Kafka Streams' KeyValueIterator
+type KeyValueIterator[K, V any] interface {
+	// HasNext returns true if there are more elements
+	HasNext() bool
+
+	// Next returns the next key-value pair
+	Next() (K, V, error)
+
+	// Close closes the iterator
+	Close() error
 }
 
-func (t *KeyValueStore[K, V]) Init() error {
-	return t.store.Init()
+// WindowedStore is a windowed state store interface
+// Matches Kafka Streams' org.apache.kafka.streams.state.WindowStore
+type WindowedStore[K comparable, V any] interface {
+	StateStore
+
+	// Set stores a value for a key at a specific timestamp
+	Set(ctx context.Context, key K, value V, timestamp int64) error
+
+	// Get retrieves a value by key at a specific timestamp
+	Get(ctx context.Context, key K, timestamp int64) (V, bool, error)
+
+	// Fetch retrieves values for a key within a time range
+	Fetch(ctx context.Context, key K, timeFrom, timeTo int64) (KeyValueIterator[K, V], error)
+
+	// Delete removes a value for a key at a specific timestamp
+	Delete(ctx context.Context, key K, timestamp int64) error
 }
 
-func (t *KeyValueStore[K, V]) Flush() error {
-	return t.store.Flush()
-}
-
-func (t *KeyValueStore[K, V]) Close() error {
-	return t.store.Close()
-}
-
-func (t *KeyValueStore[K, V]) Checkpoint(ctx context.Context, id string) error {
-	return nil
-}
-
-func (t *KeyValueStore[K, V]) Set(k K, v V) error {
-	key, err := t.keySerializer(k)
-	if err != nil {
-		return err
-	}
-
-	value, err := t.valueSerializer(v)
-	if err != nil {
-		return err
-	}
-
-	return t.store.Set(key, value)
-}
-
-func (t *KeyValueStore[K, V]) Get(k K) (V, error) {
-	var v V
-	key, err := t.keySerializer(k)
-	if err != nil {
-		return v, err
-	}
-
-	res, err := t.store.Get(key)
-	if err != nil {
-		return v, err
-	}
-
-	return t.valueDeserializer(res)
-}
-
+// StoreBackend is the old backend interface (DEPRECATED)
+// Will be removed in future versions
 type StoreBackend interface {
 	Store
 	Set(k, v []byte) error
-	Get(k []byte) (v []byte, err error)
+	Get(k []byte) ([]byte, error)
+	Delete(k []byte) error
+	Range(lower, upper []byte) (Iterator, error)
+	All() (Iterator, error)
 }
 
-// TODO/FIXME make store name part of params
-type StoreBuilder func(name string, partition int32) (Store, error)
-
-type StoreBackendBuilder func(name string, p int32) (StoreBackend, error)
+// RegisterStore registers a store builder with the topology
+func RegisterStore(t *TopologyBuilder, storeBuilder StoreBuilder[StateStore], name string) {
+	t.graph.stores[name] = &StoreDefinition{
+		Name:    name,
+		Builder: storeBuilder,
+	}
+}

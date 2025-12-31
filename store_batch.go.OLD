@@ -1,0 +1,170 @@
+package kstreams
+
+// BatchStore extends Store with bulk operations support.
+type BatchStore interface {
+	Store
+
+	// SupportsBatching returns true if this store backend supports batch operations.
+	// If false, batch operations will fall back to individual operations.
+	SupportsBatching() bool
+}
+
+// BatchStoreBackend extends StoreBackend with bulk read/write operations.
+type BatchStoreBackend interface {
+	StoreBackend
+
+	// SupportsBatching returns true if this backend supports batch operations natively.
+	SupportsBatching() bool
+
+	// SetBatch writes multiple key-value pairs in a single atomic operation.
+	// For stores like Pebble/RocksDB, this uses WriteBatch for better performance.
+	// Nil values represent tombstones (deletes).
+	SetBatch(kvs []KV[[]byte, []byte]) error
+
+	// GetBatch retrieves multiple values for given keys.
+	// Missing keys are omitted from results (not an error).
+	// Returns results in undefined order (may not match input key order).
+	GetBatch(keys [][]byte) ([]KV[[]byte, []byte], error)
+
+	// DeleteBatch removes multiple keys in a single atomic operation.
+	DeleteBatch(keys [][]byte) error
+}
+
+// BatchKeyValueStore is now defined in store.go
+
+// KeyValueStoreBatch - OLD ARCHITECTURE, will be removed
+// TODO: Migrate to new architecture with interfaces
+// type KeyValueStoreBatch[K, V any] struct {
+// 	*KeyValueStore[K, V]
+// 	batchBackend BatchStoreBackend
+// }
+
+// NewKeyValueStoreBatch creates a batch-capable typed store.
+func NewKeyValueStoreBatch[K, V any](
+	backend BatchStoreBackend,
+	keySerializer Serializer[K],
+	valueSerializer Serializer[V],
+	keyDeserializer Deserializer[K],
+	valueDeserializer Deserializer[V],
+) *KeyValueStoreBatch[K, V] {
+	return &KeyValueStoreBatch[K, V]{
+		KeyValueStore: NewKeyValueStore(
+			backend,
+			keySerializer,
+			valueSerializer,
+			keyDeserializer,
+			valueDeserializer,
+		),
+		batchBackend: backend,
+	}
+}
+
+// SupportsBatching returns true if the backend supports batch operations.
+func (s *KeyValueStoreBatch[K, V]) SupportsBatching() bool {
+	return s.batchBackend.SupportsBatching()
+}
+
+// SetBatch writes multiple key-value pairs atomically.
+func (s *KeyValueStoreBatch[K, V]) SetBatch(kvs []KV[K, V]) error {
+	if !s.batchBackend.SupportsBatching() {
+		// Fallback: set one-by-one
+		for _, kv := range kvs {
+			if err := s.Set(kv.Key, kv.Value); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Serialize all keys and values
+	rawKVs := make([]KV[[]byte, []byte], len(kvs))
+	for i, kv := range kvs {
+		key, err := s.keySerializer(kv.Key)
+		if err != nil {
+			return err
+		}
+		value, err := s.valueSerializer(kv.Value)
+		if err != nil {
+			return err
+		}
+		rawKVs[i] = KV[[]byte, []byte]{Key: key, Value: value}
+	}
+
+	return s.batchBackend.SetBatch(rawKVs)
+}
+
+// GetBatch retrieves multiple values for given keys.
+func (s *KeyValueStoreBatch[K, V]) GetBatch(keys []K) ([]KV[K, V], error) {
+	if !s.batchBackend.SupportsBatching() {
+		// Fallback: get one-by-one
+		results := make([]KV[K, V], 0, len(keys))
+		for _, k := range keys {
+			v, err := s.Get(k)
+			if err == ErrKeyNotFound {
+				continue // Skip missing keys
+			}
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, KV[K, V]{Key: k, Value: v})
+		}
+		return results, nil
+	}
+
+	// Serialize keys
+	rawKeys := make([][]byte, len(keys))
+	for i, k := range keys {
+		key, err := s.keySerializer(k)
+		if err != nil {
+			return nil, err
+		}
+		rawKeys[i] = key
+	}
+
+	// Batch get
+	rawResults, err := s.batchBackend.GetBatch(rawKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	// Deserialize results
+	results := make([]KV[K, V], len(rawResults))
+	for i, raw := range rawResults {
+		key, err := s.keyDeserializer(raw.Key)
+		if err != nil {
+			return nil, err
+		}
+		value, err := s.valueDeserializer(raw.Value)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = KV[K, V]{Key: key, Value: value}
+	}
+
+	return results, nil
+}
+
+// DeleteBatch removes multiple keys atomically.
+func (s *KeyValueStoreBatch[K, V]) DeleteBatch(keys []K) error {
+	if !s.batchBackend.SupportsBatching() {
+		// Fallback: delete one-by-one
+		for _, k := range keys {
+			if err := s.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Serialize keys
+	rawKeys := make([][]byte, len(keys))
+	for i, k := range keys {
+		key, err := s.keySerializer(k)
+		if err != nil {
+			return err
+		}
+		rawKeys[i] = key
+	}
+
+	return s.batchBackend.DeleteBatch(rawKeys)
+}

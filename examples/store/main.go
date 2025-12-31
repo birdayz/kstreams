@@ -8,7 +8,6 @@ import (
 
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/serde"
-	"github.com/birdayz/kstreams/stores/pebble"
 	"github.com/lmittmann/tint"
 
 	"net/http"
@@ -28,16 +27,16 @@ func init() {
 func main() {
 	t := kstreams.NewTopologyBuilder()
 
-	kstreams.RegisterStore(t,
-		kstreams.KVStore(
-			pebble.NewStoreBackend("/tmp/kstreams"), serde.String, serde.String,
-		),
-		"my-store")
-	kstreams.RegisterSource(t, "my-topic", "my-topic", serde.StringDeserializer, serde.StringDeserializer)
-	kstreams.RegisterSource(t, "my-second-topic", "my-second-topic", serde.StringDeserializer, serde.StringDeserializer)
-	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-1", "my-topic", "my-store")
-	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
-	kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serde.StringSerializer, serde.StringSerializer, "processor-2")
+	// kstreams.RegisterStore(t,
+	// kstreams.KVStore(
+	// 	pebble.NewStoreBackend("/tmp/kstreams"), serde.String, serde.String,
+	// ),
+	// "my-store")
+	kstreams.RegisterSource(t, "cdc.ExampleTable", "cdc.ExampleTable", serde.StringDeserializer, serde.StringDeserializer)
+	// kstreams.RegisterSource(t, "my-second-topic", "my-second-topic", serde.StringDeserializer, serde.StringDeserializer)
+	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-1", "cdc.ExampleTable")
+	// kstreams.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
+	// kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serde.StringSerializer, serde.StringSerializer, "processor-2")
 
 	app := kstreams.New(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLog(log))
 
