@@ -1174,6 +1174,7 @@ func countRecordsWithIsolation(t *testing.T, brokers []string, topic string, iso
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumeTopics(topic),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 		kgo.FetchIsolationLevel(isolation),
 	)
 	require.NoError(t, err)
