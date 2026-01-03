@@ -166,13 +166,10 @@ func TestStatefulAggregation(t *testing.T) {
 		kstreams.RegisterSource(topo, "source", "count-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register state store for counting
-		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-			backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-			if err != nil {
-				return nil, err
-			}
-			return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-		}, "counts")
+		kdag.RegisterStore(topo,
+			pebble.NewKeyValueStoreBuilder[string, int]("counts", stateDir).
+				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+			"counts")
 
 		// Register counting processor
 		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
@@ -270,13 +267,10 @@ func TestStatefulAggregation(t *testing.T) {
 		kstreams.RegisterSource(topo, "source", "sum-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register state store for summing
-		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-			backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-			if err != nil {
-				return nil, err
-			}
-			return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-		}, "sums")
+		kdag.RegisterStore(topo,
+			pebble.NewKeyValueStoreBuilder[string, int]("sums", stateDir).
+				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+			"sums")
 
 		// Register summing processor
 		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
@@ -380,13 +374,10 @@ func TestStatePersistence(t *testing.T) {
 			topo := kdag.NewBuilder()
 			kstreams.RegisterSource(topo, "source", "persist-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
-			kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-				backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-				if err != nil {
-					return nil, err
-				}
-				return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-			}, "counts")
+			kdag.RegisterStore(topo,
+				pebble.NewKeyValueStoreBuilder[string, int]("counts", stateDir).
+					WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+				"counts")
 
 			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &CountingProcessor{storeName: "counts"}
@@ -452,13 +443,10 @@ func TestStatePersistence(t *testing.T) {
 			topo := kdag.NewBuilder()
 			kstreams.RegisterSource(topo, "source", "persist-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
-			kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-				backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-				if err != nil {
-					return nil, err
-				}
-				return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-			}, "counts")
+			kdag.RegisterStore(topo,
+				pebble.NewKeyValueStoreBuilder[string, int]("counts", stateDir).
+					WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+				"counts")
 
 			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &CountingProcessor{storeName: "counts"}
@@ -558,13 +546,10 @@ func TestStoreFlush(t *testing.T) {
 		topo := kdag.NewBuilder()
 		kstreams.RegisterSource(topo, "source", "flush-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
-		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-			backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-			if err != nil {
-				return nil, err
-			}
-			return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-		}, "counts")
+		kdag.RegisterStore(topo,
+			pebble.NewKeyValueStoreBuilder[string, int]("counts", stateDir).
+				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+			"counts")
 
 		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingProcessor{storeName: "counts"}
@@ -650,21 +635,15 @@ func TestMultipleStores(t *testing.T) {
 		kstreams.RegisterSource(topo, "source", "multi-store-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register two separate stores
-		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-			backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-			if err != nil {
-				return nil, err
-			}
-			return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-		}, "store1")
+		kdag.RegisterStore(topo,
+			pebble.NewKeyValueStoreBuilder[string, int]("store1", stateDir).
+				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+			"store1")
 
-		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
-			backend, err := pebble.NewStoreBackend(stateDir)(name, p)
-			if err != nil {
-				return nil, err
-			}
-			return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
-		}, "store2")
+		kdag.RegisterStore(topo,
+			pebble.NewKeyValueStoreBuilder[string, int]("store2", stateDir).
+				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
+			"store2")
 
 		// Use first store
 		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
