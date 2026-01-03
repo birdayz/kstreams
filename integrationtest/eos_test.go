@@ -44,8 +44,8 @@ func TestExactlyOnceConfiguration(t *testing.T) {
 
 	// Build simple passthrough topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, inputTopic)
+	kstreams.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, inputTopic)
 	topology := tb.MustBuild()
 
 	// Create app with EOS enabled
@@ -106,14 +106,14 @@ func TestPassthroughNonEOS(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(
 		tb,
 		newPassthroughProcessor(),
 		"passthrough",
 		"source",
 	)
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	// Create app WITHOUT EOS
@@ -180,14 +180,14 @@ func TestTransactionalProduce(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(
 		tb,
 		newPassthroughProcessor(),
 		"passthrough",
 		"source",
 	)
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -293,14 +293,14 @@ func TestTransactionAbortOnError(t *testing.T) {
 
 	// Build topology with error-prone processor
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(
+	kstreams.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(
 		tb,
 		newErrorProneProcessor(),
 		"error-processor",
 		inputTopic,
 	)
-	kdag.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, "error-processor")
+	kstreams.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, "error-processor")
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -360,7 +360,7 @@ func TestEOSCrashBeforeCommit(t *testing.T) {
 
 	// Build topology with crash processor that crashes after 50 records
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
 
 	crashAfter := 50
 	processedCount := 0
@@ -371,8 +371,8 @@ func TestEOSCrashBeforeCommit(t *testing.T) {
 		}
 	}
 
-	kdag.RegisterProcessor(tb, crashProcessor, "crash-processor", "source")
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "crash-processor")
+	kstreams.RegisterProcessor(tb, crashProcessor, "crash-processor", "source")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "crash-processor")
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -437,9 +437,9 @@ func TestEOSCrashAfterCommit(t *testing.T) {
 
 	// Build simple passthrough topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	// Use same group name for both runs to demonstrate offset behavior
@@ -553,9 +553,9 @@ func TestEOSMultiplePartitions(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	// Create app with 3 workers (one per partition)
@@ -635,16 +635,16 @@ func TestEOSMultipleOutputTopics(t *testing.T) {
 
 	// Build topology that writes to TWO output topics
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
 
 	// Processor that forwards to two different sinks
 	dualForwarder := func() kprocessor.Processor[string, string, string, string] {
 		return &DualForwardProcessor{}
 	}
-	kdag.RegisterProcessor(tb, dualForwarder, "dual-forwarder", "source")
+	kstreams.RegisterProcessor(tb, dualForwarder, "dual-forwarder", "source")
 
-	kdag.RegisterSink(tb, "sink1", outputTopic1, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder")
-	kdag.RegisterSink(tb, "sink2", outputTopic2, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder")
+	kstreams.RegisterSink(tb, "sink1", outputTopic1, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder")
+	kstreams.RegisterSink(tb, "sink2", outputTopic2, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder")
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -709,9 +709,9 @@ func TestEOSProducerFencing(t *testing.T) {
 
 	// Build topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	// SAME group name for both apps (simulates zombie)
@@ -817,9 +817,9 @@ func TestEOSLargeBatch(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -897,15 +897,15 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 		),
 		"counts",
 	)
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(
 		tb,
 		newCountingProcessor("counts"),
 		"counter",
 		"source",
 		"counts",
 	)
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter")
 	topology := tb.MustBuild()
 
 	// Run 1: Process with EOS
@@ -998,9 +998,9 @@ func TestEOSMixedProducers(t *testing.T) {
 
 	// EOS consumer reads and processes
 	tb := kdag.NewBuilder()
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
 	topology := tb.MustBuild()
 
 	app := kstreams.MustNew(
@@ -1072,15 +1072,15 @@ func TestEOSWithStateStore(t *testing.T) {
 		),
 		"eos-counts",
 	)
-	kdag.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterProcessor(
+	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterProcessor(
 		tb,
 		newCountingProcessor("eos-counts"),
 		"counter",
 		"source",
 		"eos-counts",
 	)
-	kdag.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter")
+	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter")
 	topology := tb.MustBuild()
 
 	// Create app with EOS

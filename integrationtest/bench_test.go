@@ -52,8 +52,8 @@ func BenchmarkConsume(b *testing.B) {
 	assert.NoError(b, err)
 
 	topology := kdag.NewBuilder()
-	kdag.RegisterSource(topology, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
-	kdag.RegisterSink(topology, "sink", "sink", kserde.StringSerializer, kserde.StringSerializer, "source")
+	kstreams.RegisterSource(topology, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
+	kstreams.RegisterSink(topology, "sink", "sink", kserde.StringSerializer, kserde.StringSerializer, "source")
 	kstr := kstreams.MustNew(topology.MustBuild(), "bench", kstreams.WithBrokers([]string{brokers}))
 
 	go func() { assert.NoError(b, kstr.Run()) }()

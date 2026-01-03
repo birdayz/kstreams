@@ -58,10 +58,10 @@ func TestWorkerStateTransitions(t *testing.T) {
 
 		// Build simple topology
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "worker-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "worker-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &processedCount}
 		}, "processor", "source")
 
@@ -138,10 +138,10 @@ func TestWorkerCommitInterval(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "commit-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "commit-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &processedCount}
 		}, "processor", "source")
 
@@ -198,10 +198,10 @@ func TestWorkerErrorHandling(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "error-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "error-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Processor that errors on specific key
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &ErroringProcessor{errorOnKey: "error-key"}
 		}, "processor", "source")
 
@@ -288,12 +288,12 @@ func TestWorkerMultiplePartitions(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "multi-partition-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "multi-partition-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
 		partitionsSeen := sync.Map{}
 
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &PartitionTrackingProcessor{
 				count:          &processedCount,
 				partitionsSeen: &partitionsSeen,
@@ -387,10 +387,10 @@ func TestWorkerCloseGracefully(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "close-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "close-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &processedCount}
 		}, "processor", "source")
 
@@ -450,10 +450,10 @@ func TestWorkerRebalance(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "rebalance-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "rebalance-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		count1 := atomic.Int32{}
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &count1}
 		}, "processor", "source")
 
@@ -484,10 +484,10 @@ func TestWorkerRebalance(t *testing.T) {
 
 		// Start second worker to trigger rebalance
 		topo2 := kdag.NewBuilder()
-		kdag.RegisterSource(topo2, "source", "rebalance-test", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo2, "source", "rebalance-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		count2 := atomic.Int32{}
-		kdag.RegisterProcessor(topo2, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo2, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &count2}
 		}, "processor", "source")
 

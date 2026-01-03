@@ -11,6 +11,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/kdag"
 	"github.com/birdayz/kstreams/kserde"
 	"github.com/birdayz/kstreams/kstate/pebble"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -68,9 +69,9 @@ func TestChangelogBasic(t *testing.T) {
 	builder := kdag.NewBuilder()
 
 	// Register source
-	kdag.MustRegisterSource(builder, "source", inputTopic,
-		kserde.StringDeserializer{},
-		kserde.StringDeserializer{},
+	kstreams.MustRegisterSource(builder, "source", inputTopic,
+		kserde.StringDeserializer,
+		kserde.StringDeserializer,
 	)
 
 	// Register store with changelog enabled (default behavior for Pebble stores)

@@ -166,7 +166,7 @@ func TestStatefulAggregation(t *testing.T) {
 
 		// Build topology with state store
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "count-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "count-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register state store for counting
 		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
@@ -178,13 +178,13 @@ func TestStatefulAggregation(t *testing.T) {
 		}, "counts")
 
 		// Register counting processor
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingProcessor{storeName: "counts"}
 		}, "counter", "source", "counts")
 
 		// Add spy to capture output
 		out := make(chan [2]string, 100)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "counter")
 
@@ -270,7 +270,7 @@ func TestStatefulAggregation(t *testing.T) {
 		stateDir := t.TempDir()
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "sum-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "sum-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register state store for summing
 		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
@@ -282,12 +282,12 @@ func TestStatefulAggregation(t *testing.T) {
 		}, "sums")
 
 		// Register summing processor
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SummingProcessor{storeName: "sums"}
 		}, "summer", "source", "sums")
 
 		out := make(chan [2]string, 100)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "summer")
 
@@ -381,7 +381,7 @@ func TestStatePersistence(t *testing.T) {
 		// First run: process some messages
 		func() {
 			topo := kdag.NewBuilder()
-			kdag.RegisterSource(topo, "source", "persist-input", kserde.StringDeserializer, kserde.StringDeserializer)
+			kstreams.RegisterSource(topo, "source", "persist-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 			kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
 				backend, err := pebble.NewStoreBackend(stateDir)(name, p)
@@ -391,12 +391,12 @@ func TestStatePersistence(t *testing.T) {
 				return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
 			}, "counts")
 
-			kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &CountingProcessor{storeName: "counts"}
 			}, "counter", "source", "counts")
 
 			out := make(chan [2]string, 100)
-			kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &SpyProcessor{out: out}
 			}, "spy", "counter")
 
@@ -453,7 +453,7 @@ func TestStatePersistence(t *testing.T) {
 		// Second run: verify state is restored and counting continues
 		func() {
 			topo := kdag.NewBuilder()
-			kdag.RegisterSource(topo, "source", "persist-input", kserde.StringDeserializer, kserde.StringDeserializer)
+			kstreams.RegisterSource(topo, "source", "persist-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 			kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
 				backend, err := pebble.NewStoreBackend(stateDir)(name, p)
@@ -463,12 +463,12 @@ func TestStatePersistence(t *testing.T) {
 				return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
 			}, "counts")
 
-			kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &CountingProcessor{storeName: "counts"}
 			}, "counter", "source", "counts")
 
 			out := make(chan [2]string, 100)
-			kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &SpyProcessor{out: out}
 			}, "spy", "counter")
 
@@ -559,7 +559,7 @@ func TestStoreFlush(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "flush-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "flush-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
 			backend, err := pebble.NewStoreBackend(stateDir)(name, p)
@@ -569,12 +569,12 @@ func TestStoreFlush(t *testing.T) {
 			return kstate.NewKeyValueStore(backend, kserde.StringSerializer, intSerializer, kserde.StringDeserializer, intDeserializer), nil
 		}, "counts")
 
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingProcessor{storeName: "counts"}
 		}, "counter", "source", "counts")
 
 		out := make(chan [2]string, 100)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "counter")
 
@@ -650,7 +650,7 @@ func TestMultipleStores(t *testing.T) {
 		stateDir := t.TempDir()
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "multi-store-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "multi-store-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register two separate stores
 		kdag.RegisterStore(topo, func(name string, p int32) (kstate.Store, error) {
@@ -670,17 +670,17 @@ func TestMultipleStores(t *testing.T) {
 		}, "store2")
 
 		// Use first store
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingProcessor{storeName: "store1"}
 		}, "counter1", "source", "store1")
 
 		// Use second store
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SummingProcessor{storeName: "store2"}
 		}, "summer", "counter1", "store2")
 
 		out := make(chan [2]string, 100)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "summer")
 

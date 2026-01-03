@@ -130,10 +130,10 @@ func TestWithSimpleProcessor(t *testing.T) {
 			assert.NoError(t, err)
 
 			topo := kdag.NewBuilder()
-			kdag.RegisterSource(topo, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
+			kstreams.RegisterSource(topo, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
 
 			out := make(chan [2]string, 1)
-			kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &SpyProcessor{
 					out: out,
 				}
@@ -182,10 +182,10 @@ func TestTransformationProcessor(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Add transformation processor (uppercase)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &TransformProcessor{
 				transform: strings.ToUpper,
 			}
@@ -193,7 +193,7 @@ func TestTransformationProcessor(t *testing.T) {
 
 		// Add spy to capture output
 		out := make(chan [2]string, 1)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "transform")
 
@@ -237,16 +237,16 @@ func TestTransformationProcessor(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "input2", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "input2", kserde.StringDeserializer, kserde.StringDeserializer)
 
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &TransformProcessor{
 				transform: func(v string) string { return v + "-processed" },
 			}
 		}, "transform", "source")
 
 		out := make(chan [2]string, 1)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "transform")
 
@@ -294,10 +294,10 @@ func TestFilteringProcessor(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "filter-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "filter-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Filter: only pass values longer than 5 characters
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &FilterProcessor{
 				predicate: func(k, v string) bool {
 					return len(v) > 5
@@ -306,7 +306,7 @@ func TestFilteringProcessor(t *testing.T) {
 		}, "filter", "source")
 
 		out := make(chan [2]string, 10)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "filter")
 
@@ -377,10 +377,10 @@ func TestFilteringProcessor(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "filter-key-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "filter-key-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Filter: only pass keys starting with "allowed-"
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &FilterProcessor{
 				predicate: func(k, v string) bool {
 					return strings.HasPrefix(k, "allowed-")
@@ -389,7 +389,7 @@ func TestFilteringProcessor(t *testing.T) {
 		}, "filter", "source")
 
 		out := make(chan [2]string, 10)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "filter")
 
@@ -462,17 +462,17 @@ func TestMultiProcessorChain(t *testing.T) {
 		assert.NoError(t, err)
 
 		topo := kdag.NewBuilder()
-		kdag.RegisterSource(topo, "source", "chain-input", kserde.StringDeserializer, kserde.StringDeserializer)
+		kstreams.RegisterSource(topo, "source", "chain-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Step 1: Transform to uppercase
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &TransformProcessor{
 				transform: strings.ToUpper,
 			}
 		}, "transform", "source")
 
 		// Step 2: Filter out values containing "SKIP"
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &FilterProcessor{
 				predicate: func(k, v string) bool {
 					return !strings.Contains(v, "SKIP")
@@ -482,7 +482,7 @@ func TestMultiProcessorChain(t *testing.T) {
 
 		// Step 3: Spy to collect output
 		out := make(chan [2]string, 10)
-		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "filter")
 
