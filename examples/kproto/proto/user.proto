@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package example.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/birdayz/kstreams/kproto/example/gen/example/v1;examplev1";
+
+// User represents a user in the system
+message User {
+  // Unique user identifier (must be non-empty)
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // User's email address (must be valid email format)
+  string email = 2 [(buf.validate.field).string.email = true];
+
+  // User's display name (1-100 characters)
+  string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+
+  // User's age (must be between 0 and 150)
+  int32 age = 4 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 150
+  }];
+
+  // Account status
+  Status status = 5;
+
+  // Tags for the user (max 10 tags, each max 50 chars)
+  repeated string tags = 6 [(buf.validate.field).repeated = {
+    max_items: 10
+    items: {
+      string: {max_len: 50}
+    }
+  }];
+}
+
+// Status represents the user's account status
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_INACTIVE = 2;
+  STATUS_SUSPENDED = 3;
+}
+
+// UserEvent represents an event related to a user
+message UserEvent {
+  // Event type
+  string event_type = 1 [(buf.validate.field).string = {
+    in: ["created", "updated", "deleted"]
+  }];
+
+  // The user data
+  User user = 2 [(buf.validate.field).required = true];
+
+  // Timestamp in RFC3339 format
+  string timestamp = 3 [(buf.validate.field).string.min_len = 1];
+}

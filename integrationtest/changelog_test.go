@@ -11,8 +11,8 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serde"
-	"github.com/birdayz/kstreams/stores/pebble"
+	"github.com/birdayz/kstreams/kserde"
+	"github.com/birdayz/kstreams/kstate/pebble"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -65,12 +65,12 @@ func TestChangelogBasic(t *testing.T) {
 	t.Log("Step 1: Build topology with state store (changelog enabled)")
 
 	// Build topology
-	builder := kstreams.NewTopologyBuilder()
+	builder := kdag.NewBuilder()
 
 	// Register source
-	kstreams.MustRegisterSource(builder, "source", inputTopic,
-		serde.StringDeserializer{},
-		serde.StringDeserializer{},
+	kdag.MustRegisterSource(builder, "source", inputTopic,
+		kserde.StringDeserializer{},
+		kserde.StringDeserializer{},
 	)
 
 	// Register store with changelog enabled (default behavior for Pebble stores)

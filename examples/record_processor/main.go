@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/kprocessor"
 )
 
 // PaymentEvent represents a payment transaction
@@ -22,16 +22,16 @@ type PaymentEvent struct {
 // - Header reading and writing for tracing/correlation
 // - Enhanced context with record forwarding
 type EnrichedPaymentProcessor struct {
-	ctx kstreams.RecordProcessorContext[string, PaymentEvent]
+	ctx kprocessor.RecordProcessorContext[string, PaymentEvent]
 }
 
-func (p *EnrichedPaymentProcessor) Init(ctx kstreams.RecordProcessorContext[string, PaymentEvent]) error {
+func (p *EnrichedPaymentProcessor) Init(ctx kprocessor.RecordProcessorContext[string, PaymentEvent]) error {
 	p.ctx = ctx
 	fmt.Println("✓ EnrichedPaymentProcessor initialized with RecordProcessorContext")
 	return nil
 }
 
-func (p *EnrichedPaymentProcessor) ProcessRecord(ctx context.Context, record kstreams.Record[string, PaymentEvent]) error {
+func (p *EnrichedPaymentProcessor) ProcessRecord(ctx context.Context, record kprocessor.Record[string, PaymentEvent]) error {
 	// ========================================
 	// FEATURE 1: Access Full Record Metadata
 	// ========================================
@@ -84,7 +84,7 @@ func (p *EnrichedPaymentProcessor) ProcessRecord(ctx context.Context, record kst
 		Status: newStatus,
 	}
 
-	enrichedRecord := kstreams.Record[string, PaymentEvent]{
+	enrichedRecord := kprocessor.Record[string, PaymentEvent]{
 		Key:      record.Key,
 		Value:    enrichedPayment,
 		Metadata: record.Metadata, // Preserve all metadata
@@ -108,19 +108,19 @@ func ExampleRecordProcessorWithMetadata() {
 	fmt.Println(strings.Repeat("=", 70))
 
 	// Create a sample record with full metadata
-	sampleRecord := kstreams.Record[string, PaymentEvent]{
+	sampleRecord := kprocessor.Record[string, PaymentEvent]{
 		Key: "user-12345",
 		Value: PaymentEvent{
 			UserID: "user-12345",
 			Amount: 15000.00,
 			Status: "pending",
 		},
-		Metadata: kstreams.RecordMetadata{
+		Metadata: kprocessor.RecordMetadata{
 			Topic:     "payments",
 			Partition: 0,
 			Offset:    42,
 			Timestamp: time.Now(),
-			Headers:   kstreams.NewHeaders(),
+			Headers:   kprocessor.NewHeaders(),
 		},
 	}
 
@@ -164,15 +164,15 @@ func (m *MockRecordProcessorContext[Kout, Vout]) ForwardTo(ctx context.Context, 
 	fmt.Printf("  [Mock] ForwardedTo %s: %v -> %v\n", childName, k, v)
 }
 
-func (m *MockRecordProcessorContext[Kout, Vout]) GetStore(name string) kstreams.Store {
+func (m *MockRecordProcessorContext[Kout, Vout]) GetStore(name string) kprocessor.Store {
 	return nil
 }
 
-func (m *MockRecordProcessorContext[Kout, Vout]) ForwardRecord(ctx context.Context, record kstreams.Record[Kout, Vout]) {
+func (m *MockRecordProcessorContext[Kout, Vout]) ForwardRecord(ctx context.Context, record kprocessor.Record[Kout, Vout]) {
 	fmt.Printf("  [Mock] ForwardRecord: key=%v, headers=%d\n", record.Key, record.Metadata.Headers.Len())
 }
 
-func (m *MockRecordProcessorContext[Kout, Vout]) ForwardRecordTo(ctx context.Context, record kstreams.Record[Kout, Vout], childName string) {
+func (m *MockRecordProcessorContext[Kout, Vout]) ForwardRecordTo(ctx context.Context, record kprocessor.Record[Kout, Vout], childName string) {
 	fmt.Printf("  [Mock] ForwardRecordTo %s: key=%v\n", childName, record.Key)
 }
 
@@ -184,8 +184,8 @@ func (m *MockRecordProcessorContext[Kout, Vout]) WallClockTime() time.Time {
 	return time.Now()
 }
 
-func (m *MockRecordProcessorContext[Kout, Vout]) RecordMetadata() kstreams.RecordMetadata {
-	return kstreams.RecordMetadata{}
+func (m *MockRecordProcessorContext[Kout, Vout]) RecordMetadata() kprocessor.RecordMetadata {
+	return kprocessor.RecordMetadata{}
 }
 
 func (m *MockRecordProcessorContext[Kout, Vout]) TaskID() string {
@@ -196,12 +196,12 @@ func (m *MockRecordProcessorContext[Kout, Vout]) Partition() int32 {
 	return 0
 }
 
-func (m *MockRecordProcessorContext[Kout, Vout]) Schedule(interval time.Duration, pType kstreams.PunctuationType, callback kstreams.Punctuator) kstreams.Cancellable {
+func (m *MockRecordProcessorContext[Kout, Vout]) Schedule(interval time.Duration, pType kprocessor.PunctuationType, callback kprocessor.Punctuator) kprocessor.Cancellable {
 	return nil
 }
 
-func (m *MockRecordProcessorContext[Kout, Vout]) Headers() *kstreams.Headers {
-	return kstreams.NewHeaders()
+func (m *MockRecordProcessorContext[Kout, Vout]) Headers() *kprocessor.Headers {
+	return kprocessor.NewHeaders()
 }
 
 func main() {

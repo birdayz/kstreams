@@ -11,7 +11,9 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serde"
+	"github.com/birdayz/kstreams/kdag"
+	"github.com/birdayz/kstreams/kprocessor"
+	"github.com/birdayz/kstreams/kserde"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -55,15 +57,15 @@ func TestWorkerStateTransitions(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Build simple topology
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "worker-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "worker-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &processedCount}
 		}, "processor", "source")
 
-		app := kstreams.New(topo.MustBuild(), "worker-state-test",
+		app := kstreams.MustNew(topo.MustBuild(), "worker-state-test",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default()))
 
@@ -98,11 +100,11 @@ func TestWorkerStateTransitions(t *testing.T) {
 
 // CountingTestProcessor counts how many messages it processes
 type CountingTestProcessor struct {
-	ctx   kstreams.ProcessorContext[string, string]
+	ctx   kprocessor.ProcessorContext[string, string]
 	count *atomic.Int32
 }
 
-func (p *CountingTestProcessor) Init(ctx kstreams.ProcessorContext[string, string]) error {
+func (p *CountingTestProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
 	return nil
 }
@@ -135,16 +137,16 @@ func TestWorkerCommitInterval(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "commit-test")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "commit-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "commit-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &processedCount}
 		}, "processor", "source")
 
 		// Short commit interval
-		app := kstreams.New(topo.MustBuild(), "commit-interval-test",
+		app := kstreams.MustNew(topo.MustBuild(), "commit-interval-test",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default()),
 			kstreams.WithCommitInterval(1*time.Second))
@@ -195,15 +197,15 @@ func TestWorkerErrorHandling(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "error-test")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "error-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "error-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Processor that errors on specific key
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &ErroringProcessor{errorOnKey: "error-key"}
 		}, "processor", "source")
 
-		app := kstreams.New(topo.MustBuild(), "error-test",
+		app := kstreams.MustNew(topo.MustBuild(), "error-test",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default()))
 
@@ -245,11 +247,11 @@ func TestWorkerErrorHandling(t *testing.T) {
 
 // ErroringProcessor fails on a specific key
 type ErroringProcessor struct {
-	ctx        kstreams.ProcessorContext[string, string]
+	ctx        kprocessor.ProcessorContext[string, string]
 	errorOnKey string
 }
 
-func (p *ErroringProcessor) Init(ctx kstreams.ProcessorContext[string, string]) error {
+func (p *ErroringProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
 	return nil
 }
@@ -285,20 +287,20 @@ func TestWorkerMultiplePartitions(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 3, 1, map[string]*string{}, "multi-partition-test")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "multi-partition-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "multi-partition-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
 		partitionsSeen := sync.Map{}
 
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &PartitionTrackingProcessor{
 				count:          &processedCount,
 				partitionsSeen: &partitionsSeen,
 			}
 		}, "processor", "source")
 
-		app := kstreams.New(topo.MustBuild(), "multi-partition-test",
+		app := kstreams.MustNew(topo.MustBuild(), "multi-partition-test",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default()))
 
@@ -340,12 +342,12 @@ func TestWorkerMultiplePartitions(t *testing.T) {
 
 // PartitionTrackingProcessor tracks which partitions it processes from
 type PartitionTrackingProcessor struct {
-	ctx            kstreams.ProcessorContext[string, string]
+	ctx            kprocessor.ProcessorContext[string, string]
 	count          *atomic.Int32
 	partitionsSeen *sync.Map
 }
 
-func (p *PartitionTrackingProcessor) Init(ctx kstreams.ProcessorContext[string, string]) error {
+func (p *PartitionTrackingProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
 	return nil
 }
@@ -384,15 +386,15 @@ func TestWorkerCloseGracefully(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "close-test")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "close-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "close-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		processedCount := atomic.Int32{}
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &processedCount}
 		}, "processor", "source")
 
-		app := kstreams.New(topo.MustBuild(), "close-graceful-test",
+		app := kstreams.MustNew(topo.MustBuild(), "close-graceful-test",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default()),
 			kstreams.WithCommitInterval(10*time.Second)) // Long interval to test close commits
@@ -447,16 +449,16 @@ func TestWorkerRebalance(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 2, 1, map[string]*string{}, "rebalance-test")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "rebalance-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "rebalance-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		count1 := atomic.Int32{}
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &count1}
 		}, "processor", "source")
 
 		// Start first worker
-		app1 := kstreams.New(topo.MustBuild(), "rebalance-group",
+		app1 := kstreams.MustNew(topo.MustBuild(), "rebalance-group",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default().With("app", "app1")),
 			kstreams.WithWorkersCount(1))
@@ -481,15 +483,15 @@ func TestWorkerRebalance(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// Start second worker to trigger rebalance
-		topo2 := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo2, "source", "rebalance-test", serde.StringDeserializer, serde.StringDeserializer)
+		topo2 := kdag.NewBuilder()
+		kdag.RegisterSource(topo2, "source", "rebalance-test", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		count2 := atomic.Int32{}
-		kstreams.RegisterProcessor(topo2, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo2, func() kprocessor.Processor[string, string, string, string] {
 			return &CountingTestProcessor{count: &count2}
 		}, "processor", "source")
 
-		app2 := kstreams.New(topo2.MustBuild(), "rebalance-group",
+		app2 := kstreams.MustNew(topo2.MustBuild(), "rebalance-group",
 			kstreams.WithBrokers(broker.BootstrapServers()),
 			kstreams.WithLog(slog.Default().With("app", "app2")),
 			kstreams.WithWorkersCount(1))

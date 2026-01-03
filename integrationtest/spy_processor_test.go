@@ -3,14 +3,14 @@ package integrationtest
 import (
 	"context"
 
-	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/kprocessor"
 )
 
 type SpyProcessor struct {
 	out chan [2]string
 }
 
-func (p *SpyProcessor) Init(processorContext kstreams.ProcessorContext[string, string]) error {
+func (p *SpyProcessor) Init(processorContext kprocessor.ProcessorContext[string, string]) error {
 	return nil
 }
 

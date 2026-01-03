@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/kprocessor"
 )
 
 // OrderEvent represents an order in an e-commerce system
@@ -24,16 +24,16 @@ type OrderEvent struct {
 // SimpleOrderProcessor processes orders without any interceptors
 // This is just the core business logic
 type SimpleOrderProcessor struct {
-	ctx          kstreams.RecordProcessorContext[string, OrderEvent]
+	ctx          kprocessor.RecordProcessorContext[string, OrderEvent]
 	failureCount int // Simulate occasional failures
 }
 
-func (p *SimpleOrderProcessor) Init(ctx kstreams.RecordProcessorContext[string, OrderEvent]) error {
+func (p *SimpleOrderProcessor) Init(ctx kprocessor.RecordProcessorContext[string, OrderEvent]) error {
 	p.ctx = ctx
 	return nil
 }
 
-func (p *SimpleOrderProcessor) ProcessRecord(ctx context.Context, record kstreams.Record[string, OrderEvent]) error {
+func (p *SimpleOrderProcessor) ProcessRecord(ctx context.Context, record kprocessor.Record[string, OrderEvent]) error {
 	// Simulate occasional failures for demo purposes
 	p.failureCount++
 	if p.failureCount == 3 {
@@ -81,11 +81,11 @@ func ExampleBasicInterceptors() {
 	baseProcessor := &SimpleOrderProcessor{}
 
 	// Wrap it with interceptors - no changes to the processor itself!
-	processorWithInterceptors := kstreams.WithInterceptors(
+	processorWithInterceptors := kprocessor.WithInterceptors(
 		baseProcessor,
-		kstreams.LoggingInterceptor[string, OrderEvent](logger),
-		kstreams.MetricsInterceptor[string, OrderEvent](&recordsProcessed, &processingTime),
-		kstreams.ErrorHandlingInterceptor[string, OrderEvent](2, 100*time.Millisecond),
+		kprocessor.LoggingInterceptor[string, OrderEvent](logger),
+		kprocessor.MetricsInterceptor[string, OrderEvent](&recordsProcessed, &processingTime),
+		kprocessor.ErrorHandlingInterceptor[string, OrderEvent](2, 100*time.Millisecond),
 	)
 
 	// Initialize
@@ -120,7 +120,7 @@ func ExampleCustomInterceptor() {
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Custom interceptor 1: Authentication check
-	authInterceptor := func(ctx context.Context, record kstreams.Record[string, OrderEvent], handler kstreams.ProcessorHandler[string, OrderEvent]) error {
+	authInterceptor := func(ctx context.Context, record kprocessor.Record[string, OrderEvent], handler kprocessor.ProcessorHandler[string, OrderEvent]) error {
 		// Check if user-id header exists
 		if userID, ok := record.Metadata.Headers.Get("user-id"); ok {
 			fmt.Printf("🔐 Auth: Verified user %s\n", string(userID))
@@ -131,7 +131,7 @@ func ExampleCustomInterceptor() {
 
 	// Custom interceptor 2: Rate limiting
 	var requestCount atomic.Int64
-	rateLimitInterceptor := func(ctx context.Context, record kstreams.Record[string, OrderEvent], handler kstreams.ProcessorHandler[string, OrderEvent]) error {
+	rateLimitInterceptor := func(ctx context.Context, record kprocessor.Record[string, OrderEvent], handler kprocessor.ProcessorHandler[string, OrderEvent]) error {
 		count := requestCount.Add(1)
 		const rateLimit = 5
 
@@ -144,7 +144,7 @@ func ExampleCustomInterceptor() {
 	}
 
 	// Custom interceptor 3: Audit trail
-	auditInterceptor := func(ctx context.Context, record kstreams.Record[string, OrderEvent], handler kstreams.ProcessorHandler[string, OrderEvent]) error {
+	auditInterceptor := func(ctx context.Context, record kprocessor.Record[string, OrderEvent], handler kprocessor.ProcessorHandler[string, OrderEvent]) error {
 		// Add audit headers
 		record.Metadata.Headers.Set("processed-at", []byte(time.Now().Format(time.RFC3339)))
 		record.Metadata.Headers.Set("processor-version", []byte("v1.2.3"))
@@ -155,7 +155,7 @@ func ExampleCustomInterceptor() {
 	}
 
 	// Create processor with custom interceptors
-	processor := kstreams.WithInterceptors(
+	processor := kprocessor.WithInterceptors(
 		&SimpleOrderProcessor{},
 		authInterceptor,
 		rateLimitInterceptor,
@@ -197,21 +197,21 @@ func ExampleInterceptorChaining() {
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Create interceptors that show execution order
-	interceptor1 := func(ctx context.Context, record kstreams.Record[string, OrderEvent], handler kstreams.ProcessorHandler[string, OrderEvent]) error {
+	interceptor1 := func(ctx context.Context, record kprocessor.Record[string, OrderEvent], handler kprocessor.ProcessorHandler[string, OrderEvent]) error {
 		fmt.Println("  → Interceptor 1: BEFORE processing")
 		err := handler(ctx, record)
 		fmt.Println("  ← Interceptor 1: AFTER processing")
 		return err
 	}
 
-	interceptor2 := func(ctx context.Context, record kstreams.Record[string, OrderEvent], handler kstreams.ProcessorHandler[string, OrderEvent]) error {
+	interceptor2 := func(ctx context.Context, record kprocessor.Record[string, OrderEvent], handler kprocessor.ProcessorHandler[string, OrderEvent]) error {
 		fmt.Println("    → Interceptor 2: BEFORE processing")
 		err := handler(ctx, record)
 		fmt.Println("    ← Interceptor 2: AFTER processing")
 		return err
 	}
 
-	interceptor3 := func(ctx context.Context, record kstreams.Record[string, OrderEvent], handler kstreams.ProcessorHandler[string, OrderEvent]) error {
+	interceptor3 := func(ctx context.Context, record kprocessor.Record[string, OrderEvent], handler kprocessor.ProcessorHandler[string, OrderEvent]) error {
 		fmt.Println("      → Interceptor 3: BEFORE processing")
 		err := handler(ctx, record)
 		fmt.Println("      ← Interceptor 3: AFTER processing")
@@ -219,7 +219,7 @@ func ExampleInterceptorChaining() {
 	}
 
 	// Chain them: outer-to-inner execution
-	processor := kstreams.WithInterceptors(
+	processor := kprocessor.WithInterceptors(
 		&SimpleOrderProcessor{},
 		interceptor1, // Executes first (outermost)
 		interceptor2, // Executes second
@@ -242,8 +242,8 @@ func ExampleInterceptorChaining() {
 }
 
 // Helper functions
-func createSampleOrder(id int) kstreams.Record[string, OrderEvent] {
-	return kstreams.Record[string, OrderEvent]{
+func createSampleOrder(id int) kprocessor.Record[string, OrderEvent] {
+	return kprocessor.Record[string, OrderEvent]{
 		Key: fmt.Sprintf("order-%d", id),
 		Value: OrderEvent{
 			OrderID: fmt.Sprintf("order-%d", id),
@@ -251,12 +251,12 @@ func createSampleOrder(id int) kstreams.Record[string, OrderEvent] {
 			Amount:  float64(id * 500),
 			Status:  "pending",
 		},
-		Metadata: kstreams.RecordMetadata{
+		Metadata: kprocessor.RecordMetadata{
 			Topic:     "orders",
 			Partition: 0,
 			Offset:    int64(id),
 			Timestamp: time.Now(),
-			Headers:   kstreams.NewHeaders(),
+			Headers:   kprocessor.NewHeaders(),
 		},
 	}
 }
@@ -266,19 +266,19 @@ type MockContext[Kout, Vout any] struct{}
 
 func (m *MockContext[Kout, Vout]) Forward(ctx context.Context, k Kout, v Vout) {}
 func (m *MockContext[Kout, Vout]) ForwardTo(ctx context.Context, k Kout, v Vout, childName string) {}
-func (m *MockContext[Kout, Vout]) GetStore(name string) kstreams.Store {
+func (m *MockContext[Kout, Vout]) GetStore(name string) kprocessor.Store {
 	return nil
 }
-func (m *MockContext[Kout, Vout]) ForwardRecord(ctx context.Context, record kstreams.Record[Kout, Vout]) {}
-func (m *MockContext[Kout, Vout]) ForwardRecordTo(ctx context.Context, record kstreams.Record[Kout, Vout], childName string) {}
+func (m *MockContext[Kout, Vout]) ForwardRecord(ctx context.Context, record kprocessor.Record[Kout, Vout]) {}
+func (m *MockContext[Kout, Vout]) ForwardRecordTo(ctx context.Context, record kprocessor.Record[Kout, Vout], childName string) {}
 func (m *MockContext[Kout, Vout]) StreamTime() time.Time {
 	return time.Now()
 }
 func (m *MockContext[Kout, Vout]) WallClockTime() time.Time {
 	return time.Now()
 }
-func (m *MockContext[Kout, Vout]) RecordMetadata() kstreams.RecordMetadata {
-	return kstreams.RecordMetadata{}
+func (m *MockContext[Kout, Vout]) RecordMetadata() kprocessor.RecordMetadata {
+	return kprocessor.RecordMetadata{}
 }
 func (m *MockContext[Kout, Vout]) TaskID() string {
 	return "task-0"
@@ -286,11 +286,11 @@ func (m *MockContext[Kout, Vout]) TaskID() string {
 func (m *MockContext[Kout, Vout]) Partition() int32 {
 	return 0
 }
-func (m *MockContext[Kout, Vout]) Schedule(interval time.Duration, pType kstreams.PunctuationType, callback kstreams.Punctuator) kstreams.Cancellable {
+func (m *MockContext[Kout, Vout]) Schedule(interval time.Duration, pType kprocessor.PunctuationType, callback kprocessor.Punctuator) kprocessor.Cancellable {
 	return nil
 }
-func (m *MockContext[Kout, Vout]) Headers() *kstreams.Headers {
-	return kstreams.NewHeaders()
+func (m *MockContext[Kout, Vout]) Headers() *kprocessor.Headers {
+	return kprocessor.NewHeaders()
 }
 
 func main() {

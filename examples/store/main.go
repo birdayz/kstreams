@@ -7,7 +7,9 @@ import (
 	"syscall"
 
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serde"
+	"github.com/birdayz/kstreams/internal/execution"
+	"github.com/birdayz/kstreams/kdag"
+	"github.com/birdayz/kstreams/kserde"
 	"github.com/lmittmann/tint"
 
 	"net/http"
@@ -25,20 +27,20 @@ func init() {
 }
 
 func main() {
-	t := kstreams.NewTopologyBuilder()
+	t := kdag.NewBuilder()
 
-	// kstreams.RegisterStore(t,
+	// kdag.RegisterStore(t,
 	// kstreams.KVStore(
-	// 	pebble.NewStoreBackend("/tmp/kstreams"), serde.String, serde.String,
+	// 	pebble.NewStoreBackend("/tmp/kstreams"), kserde.String, kserde.String,
 	// ),
 	// "my-store")
-	kstreams.RegisterSource(t, "cdc.ExampleTable", "cdc.ExampleTable", serde.StringDeserializer, serde.StringDeserializer)
-	// kstreams.RegisterSource(t, "my-second-topic", "my-second-topic", serde.StringDeserializer, serde.StringDeserializer)
-	kstreams.RegisterProcessor(t, NewMyProcessor, "processor-1", "cdc.ExampleTable")
-	// kstreams.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
-	// kstreams.RegisterSink(t, "my-sink-topic", "my-sink-topic", serde.StringSerializer, serde.StringSerializer, "processor-2")
+	execution.RegisterSource(t, "cdc.ExampleTable", "cdc.ExampleTable", kserde.StringDeserializer, kserde.StringDeserializer)
+	// execution.RegisterSource(t, "my-second-topic", "my-second-topic", kserde.StringDeserializer, kserde.StringDeserializer)
+	execution.RegisterProcessor(t, NewMyProcessor, "processor-1", "cdc.ExampleTable")
+	// execution.RegisterProcessor(t, NewMyProcessor, "processor-2", "my-second-topic", "my-store")
+	// execution.RegisterSink(t, "my-sink-topic", "my-sink-topic", kserde.StringSerializer, kserde.StringSerializer, "processor-2")
 
-	app := kstreams.New(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLog(log))
+	app := kstreams.MustNew(t.MustBuild(), "my-app", kstreams.WithWorkersCount(1), kstreams.WithLog(log))
 
 	go func() {
 		c := make(chan os.Signal)

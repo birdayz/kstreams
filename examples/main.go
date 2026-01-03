@@ -11,7 +11,10 @@ import (
 	"log/slog"
 
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serde"
+	"github.com/birdayz/kstreams/internal/execution"
+	"github.com/birdayz/kstreams/kdag"
+	"github.com/birdayz/kstreams/kprocessor"
+	"github.com/birdayz/kstreams/kserde"
 	"github.com/lmittmann/tint"
 )
 
@@ -26,21 +29,21 @@ func init() {
 }
 
 func main() {
-	builder := kstreams.NewTopologyBuilder()
+	builder := kdag.NewBuilder()
 
-	kstreams.MustRegisterSource(builder, "test", "test", serde.StringDeserializer, serde.StringDeserializer)
-	kstreams.MustRegisterProcessor(builder,
-		func() kstreams.Processor[string, string, string, string] {
+	execution.MustRegisterSource(builder, "test", "test", kserde.StringDeserializer, kserde.StringDeserializer)
+	execution.MustRegisterProcessor(builder,
+		func() kprocessor.Processor[string, string, string, string] {
 			return &PrintlnProcessor{}
 		},
 		"printer",
 		"test",
 	)
-	kstreams.MustRegisterSink(builder, "testout", "testout", serde.StringSerializer, serde.StringSerializer, "printer")
+	execution.MustRegisterSink(builder, "testout", "testout", kserde.StringSerializer, kserde.StringSerializer, "printer")
 
 	topology := builder.MustBuild()
 
-	app := kstreams.New(topology, "my-sample-app", kstreams.WithLog(log), kstreams.WithCommitInterval(time.Second*2))
+	app := kstreams.MustNew(topology, "my-sample-app", kstreams.WithLog(log), kstreams.WithCommitInterval(time.Second*2))
 	go func() {
 		c := make(chan os.Signal)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -55,10 +58,10 @@ func main() {
 }
 
 type PrintlnProcessor struct {
-	processorContext kstreams.ProcessorContext[string, string]
+	processorContext kprocessor.ProcessorContext[string, string]
 }
 
-func (p *PrintlnProcessor) Init(processorContext kstreams.ProcessorContext[string, string]) error {
+func (p *PrintlnProcessor) Init(processorContext kprocessor.ProcessorContext[string, string]) error {
 	p.processorContext = processorContext
 	return nil
 }
@@ -67,10 +70,7 @@ func (p *PrintlnProcessor) Close() error {
 	return nil
 }
 
-// TODO make output key WindowKey[string], and generalize this
 func (p *PrintlnProcessor) Process(ctx context.Context, k string, v string) error {
 	p.processorContext.Forward(ctx, k, v+"out")
-	// fmt.Println("zzzz")
-	// fmt.Println(k, v)
 	return nil
 }

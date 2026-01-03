@@ -5,23 +5,24 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/birdayz/kstreams"
+	"github.com/birdayz/kstreams/kprocessor"
+	"github.com/birdayz/kstreams/kstate"
 )
 
-func NewMyProcessor() kstreams.Processor[string, string, string, string] {
+func NewMyProcessor() kprocessor.Processor[string, string, string, string] {
 	return &MyProcessor{
 		// storeName: "my-store",
 	}
 }
 
 type MyProcessor struct {
-	store     *kstreams.KeyValueStore[string, string]
+	store     *kstate.KeyValueStore[string, string]
 	storeName string
 
-	processorContext kstreams.ProcessorContext[string, string]
+	processorContext kprocessor.ProcessorContext[string, string]
 }
 
-func (p *MyProcessor) Init(processorContext kstreams.ProcessorContext[string, string]) error {
+func (p *MyProcessor) Init(processorContext kprocessor.ProcessorContext[string, string]) error {
 	p.processorContext = processorContext
 	// p.store = processorContext.GetStore(p.storeName).(*kstreams.KeyValueStore[string, string])
 	return nil
@@ -45,7 +46,7 @@ func (p *MyProcessor) Process(ctx context.Context, k string, v string) error {
 }
 
 type MyProcessor2 struct {
-	processorContext kstreams.ProcessorContext[string, string]
+	processorContext kprocessor.ProcessorContext[string, string]
 }
 
 func (p *MyProcessor2) Process(ctx context.Context, k string, v string) error {
@@ -54,7 +55,7 @@ func (p *MyProcessor2) Process(ctx context.Context, k string, v string) error {
 	return nil
 }
 
-func (p *MyProcessor2) Init(processorContext kstreams.ProcessorContext[string, string]) error {
+func (p *MyProcessor2) Init(processorContext kprocessor.ProcessorContext[string, string]) error {
 	p.processorContext = processorContext
 	return nil
 }

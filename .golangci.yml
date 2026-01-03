@@ -1,0 +1,42 @@
+version: "2"
+
+linters-settings:
+  errcheck:
+    check-blank: true
+  godot:
+    scope: declarations
+    capital: false
+  revive:
+    rules:
+      - name: package-comments
+        disabled: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  disable:
+    - mnd  # Magic numbers are fine
+    - perfsprint  # Performance micro-opts not critical
+    - nilnil  # Returning nil, nil can be valid
+    - unparam  # Unused parameters are OK
+    - nestif  # Complex nesting sometimes needed
+    - intrange  # Not important
+
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on test files
+    - path: ".*_test\\.go$"
+      linters:
+        - goconst
+        - dupl
+        - funlen
+        - gocyclo
+        - errcheck

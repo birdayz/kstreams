@@ -9,7 +9,8 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serde"
+	"github.com/birdayz/kstreams/kdag"
+	"github.com/birdayz/kstreams/kserde"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -50,10 +51,10 @@ func BenchmarkConsume(b *testing.B) {
 	_, err = acl.CreateTopics(context.Background(), partitionsCount, 1, map[string]*string{}, "sink")
 	assert.NoError(b, err)
 
-	topology := kstreams.NewTopologyBuilder()
-	kstreams.RegisterSource(topology, "source", "source", serde.StringDeserializer, serde.StringDeserializer)
-	kstreams.RegisterSink(topology, "sink", "sink", serde.StringSerializer, serde.StringSerializer, "source")
-	kstr := kstreams.New(topology.MustBuild(), "bench", kstreams.WithBrokers([]string{brokers}))
+	topology := kdag.NewBuilder()
+	kdag.RegisterSource(topology, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
+	kdag.RegisterSink(topology, "sink", "sink", kserde.StringSerializer, kserde.StringSerializer, "source")
+	kstr := kstreams.MustNew(topology.MustBuild(), "bench", kstreams.WithBrokers([]string{brokers}))
 
 	go func() { assert.NoError(b, kstr.Run()) }()
 

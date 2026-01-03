@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore file modification times
+        uses: chetan/git-restore-mtime-action@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache golangci-lint
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/golangci-lint
+            ~/go/bin/golangci-lint
+          key: ${{ runner.os }}-golangci-lint-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
+      - name: Run lint
+        run: golangci-lint run ./...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore file modification times
+        uses: chetan/git-restore-mtime-action@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache test results
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-testcache-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-testcache-
+          save-always: true
+
+      - name: Run unit tests
+        run: |
+          # Unset CI-specific env vars that change between runs to enable test caching
+          unset GITHUB_RUN_ID GITHUB_RUN_NUMBER GITHUB_RUN_ATTEMPT RUNNER_TRACKING_ID
+          go test -short ./...
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore file modification times
+        uses: chetan/git-restore-mtime-action@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache test results
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-integration-testcache-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-integration-testcache-
+          save-always: true
+
+      - name: Wait for Kafka
+        run: |
+          timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+
+      - name: Run integration tests
+        run: |
+          unset GITHUB_RUN_ID GITHUB_RUN_NUMBER GITHUB_RUN_ATTEMPT RUNNER_TRACKING_ID
+          go test -v ./integrationtest/...

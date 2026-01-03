@@ -9,7 +9,9 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/birdayz/kstreams"
-	"github.com/birdayz/kstreams/serde"
+	"github.com/birdayz/kstreams/kdag"
+	"github.com/birdayz/kstreams/kprocessor"
+	"github.com/birdayz/kstreams/kserde"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/redpanda"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -57,11 +59,11 @@ func (b *RedpandaBroker) BootstrapServers() []string {
 
 // TransformProcessor transforms values by applying a function
 type TransformProcessor struct {
-	ctx       kstreams.ProcessorContext[string, string]
+	ctx       kprocessor.ProcessorContext[string, string]
 	transform func(string) string
 }
 
-func (p *TransformProcessor) Init(ctx kstreams.ProcessorContext[string, string]) error {
+func (p *TransformProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
 	return nil
 }
@@ -78,11 +80,11 @@ func (p *TransformProcessor) Process(ctx context.Context, k string, v string) er
 
 // FilterProcessor filters records based on a predicate
 type FilterProcessor struct {
-	ctx       kstreams.ProcessorContext[string, string]
+	ctx       kprocessor.ProcessorContext[string, string]
 	predicate func(string, string) bool
 }
 
-func (p *FilterProcessor) Init(ctx kstreams.ProcessorContext[string, string]) error {
+func (p *FilterProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
 	return nil
 }
@@ -127,17 +129,17 @@ func TestWithSimpleProcessor(t *testing.T) {
 			_, err = acl.CreateTopics(context.Background(), 10, 1, map[string]*string{}, "source")
 			assert.NoError(t, err)
 
-			topo := kstreams.NewTopologyBuilder()
-			kstreams.RegisterSource(topo, "source", "source", serde.StringDeserializer, serde.StringDeserializer)
+			topo := kdag.NewBuilder()
+			kdag.RegisterSource(topo, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
 
 			out := make(chan [2]string, 1)
-			kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+			kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &SpyProcessor{
 					out: out,
 				}
 			}, "my-processor", "source")
 
-			app := kstreams.New(topo.MustBuild(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
+			app := kstreams.MustNew(topo.MustBuild(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 			go func() {
 				err := app.Run()
 				assert.NoError(t, err)
@@ -179,11 +181,11 @@ func TestTransformationProcessor(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "input")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "input", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Add transformation processor (uppercase)
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &TransformProcessor{
 				transform: strings.ToUpper,
 			}
@@ -191,11 +193,11 @@ func TestTransformationProcessor(t *testing.T) {
 
 		// Add spy to capture output
 		out := make(chan [2]string, 1)
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "transform")
 
-		app := kstreams.New(topo.MustBuild(), "test-transform", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
+		app := kstreams.MustNew(topo.MustBuild(), "test-transform", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 		go func() {
 			_ = app.Run()
 		}()
@@ -234,21 +236,21 @@ func TestTransformationProcessor(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "input2")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "input2", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "input2", kserde.StringDeserializer, kserde.StringDeserializer)
 
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &TransformProcessor{
 				transform: func(v string) string { return v + "-processed" },
 			}
 		}, "transform", "source")
 
 		out := make(chan [2]string, 1)
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "transform")
 
-		app := kstreams.New(topo.MustBuild(), "test-append", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
+		app := kstreams.MustNew(topo.MustBuild(), "test-append", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 		go func() {
 			_ = app.Run()
 		}()
@@ -291,11 +293,11 @@ func TestFilteringProcessor(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "filter-input")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "filter-input", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "filter-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Filter: only pass values longer than 5 characters
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &FilterProcessor{
 				predicate: func(k, v string) bool {
 					return len(v) > 5
@@ -304,11 +306,11 @@ func TestFilteringProcessor(t *testing.T) {
 		}, "filter", "source")
 
 		out := make(chan [2]string, 10)
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "filter")
 
-		app := kstreams.New(topo.MustBuild(), "test-filter", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
+		app := kstreams.MustNew(topo.MustBuild(), "test-filter", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 		go func() {
 			_ = app.Run()
 		}()
@@ -374,11 +376,11 @@ func TestFilteringProcessor(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "filter-key-input")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "filter-key-input", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "filter-key-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Filter: only pass keys starting with "allowed-"
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &FilterProcessor{
 				predicate: func(k, v string) bool {
 					return strings.HasPrefix(k, "allowed-")
@@ -387,11 +389,11 @@ func TestFilteringProcessor(t *testing.T) {
 		}, "filter", "source")
 
 		out := make(chan [2]string, 10)
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "filter")
 
-		app := kstreams.New(topo.MustBuild(), "test-filter-key", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
+		app := kstreams.MustNew(topo.MustBuild(), "test-filter-key", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 		go func() {
 			_ = app.Run()
 		}()
@@ -459,18 +461,18 @@ func TestMultiProcessorChain(t *testing.T) {
 		_, err = acl.CreateTopics(context.Background(), 1, 1, map[string]*string{}, "chain-input")
 		assert.NoError(t, err)
 
-		topo := kstreams.NewTopologyBuilder()
-		kstreams.RegisterSource(topo, "source", "chain-input", serde.StringDeserializer, serde.StringDeserializer)
+		topo := kdag.NewBuilder()
+		kdag.RegisterSource(topo, "source", "chain-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Step 1: Transform to uppercase
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &TransformProcessor{
 				transform: strings.ToUpper,
 			}
 		}, "transform", "source")
 
 		// Step 2: Filter out values containing "SKIP"
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &FilterProcessor{
 				predicate: func(k, v string) bool {
 					return !strings.Contains(v, "SKIP")
@@ -480,11 +482,11 @@ func TestMultiProcessorChain(t *testing.T) {
 
 		// Step 3: Spy to collect output
 		out := make(chan [2]string, 10)
-		kstreams.RegisterProcessor(topo, func() kstreams.Processor[string, string, string, string] {
+		kdag.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 			return &SpyProcessor{out: out}
 		}, "spy", "filter")
 
-		app := kstreams.New(topo.MustBuild(), "test-chain", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
+		app := kstreams.MustNew(topo.MustBuild(), "test-chain", kstreams.WithBrokers(broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 		go func() {
 			_ = app.Run()
 		}()
@@ -498,9 +500,9 @@ func TestMultiProcessorChain(t *testing.T) {
 			expectedVal  string
 		}{
 			{"k1", "hello", true, "HELLO"},
-			{"k2", "skip this", false, ""},        // Will be "SKIP THIS" after transform, then filtered
+			{"k2", "skip this", false, ""},   // Will be "SKIP THIS" after transform, then filtered
 			{"k3", "world", true, "WORLD"},
-			{"k4", "please skip", false, ""},      // Will be "PLEASE SKIP" after transform, then filtered
+			{"k4", "please skip", false, ""}, // Will be "PLEASE SKIP" after transform, then filtered
 			{"k5", "final message", true, "FINAL MESSAGE"},
 		}
 

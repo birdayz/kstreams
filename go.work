@@ -3,7 +3,8 @@ go 1.24.0
 use (
 	.
 	./examples
+	./examples/kproto
 	./integrationtest
-	./stores/pebble
-	./stores/s3
+	./kproto
+	./kstate/pebble
 )
