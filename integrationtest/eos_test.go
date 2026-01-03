@@ -1366,7 +1366,11 @@ func newCountingProcessor(storeName string) kprocessor.ProcessorBuilder[string, 
 
 func (p *EOSCountingProcessor) Init(ctx kprocessor.ProcessorContext[string, int64]) error {
 	p.ctx = ctx
-	p.store = ctx.GetStore(p.storeName).(kstate.KeyValueStore[string, int64])
+	store, err := kstate.GetKeyValueStore[string, int64](ctx, p.storeName)
+	if err != nil {
+		return err
+	}
+	p.store = store
 	return nil
 }
 

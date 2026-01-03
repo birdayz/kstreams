@@ -45,16 +45,11 @@ type CountingProcessor struct {
 
 func (p *CountingProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
-	store := ctx.GetStore(p.storeName)
-	if store == nil {
-		return fmt.Errorf("failed to get store: store not found")
+	store, err := kstate.GetKeyValueStore[string, int](ctx, p.storeName)
+	if err != nil {
+		return fmt.Errorf("failed to get store: %w", err)
 	}
-
-	kvStore, ok := store.(kstate.KeyValueStore[string, int])
-	if !ok {
-		return fmt.Errorf("store is not a KeyValueStore[string, int]")
-	}
-	p.store = kvStore
+	p.store = store
 	return nil
 }
 
@@ -94,16 +89,11 @@ type SummingProcessor struct {
 
 func (p *SummingProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
 	p.ctx = ctx
-	store := ctx.GetStore(p.storeName)
-	if store == nil {
-		return fmt.Errorf("failed to get store: store not found")
+	store, err := kstate.GetKeyValueStore[string, int](ctx, p.storeName)
+	if err != nil {
+		return fmt.Errorf("failed to get store: %w", err)
 	}
-
-	kvStore, ok := store.(kstate.KeyValueStore[string, int])
-	if !ok {
-		return fmt.Errorf("store is not a KeyValueStore[string, int]")
-	}
-	p.store = kvStore
+	p.store = store
 	return nil
 }
 
