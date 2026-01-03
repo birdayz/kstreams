@@ -40,7 +40,7 @@ func intDeserializer(data []byte) (int, error) {
 type CountingProcessor struct {
 	ctx       kprocessor.ProcessorContext[string, string]
 	storeName string
-	store     *kstate.KeyValueStore[string, int]
+	store     kstate.KeyValueStore[string, int]
 }
 
 func (p *CountingProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
@@ -50,7 +50,7 @@ func (p *CountingProcessor) Init(ctx kprocessor.ProcessorContext[string, string]
 		return fmt.Errorf("failed to get store: store not found")
 	}
 
-	kvStore, ok := store.(*kstate.KeyValueStore[string, int])
+	kvStore, ok := store.(kstate.KeyValueStore[string, int])
 	if !ok {
 		return fmt.Errorf("store is not a KeyValueStore[string, int]")
 	}
@@ -64,21 +64,19 @@ func (p *CountingProcessor) Close() error {
 
 func (p *CountingProcessor) Process(ctx context.Context, k string, v string) error {
 	// Get current count for this key
-	count, err := p.store.Get(k)
+	count, found, err := p.store.Get(ctx, k)
 	if err != nil {
-		// Key not found, start at 0
-		if err == kstate.ErrKeyNotFound {
-			count = 0
-		} else {
-			return fmt.Errorf("failed to get count: %w", err)
-		}
+		return fmt.Errorf("failed to get count: %w", err)
+	}
+	if !found {
+		count = 0
 	}
 
 	// Increment count
 	count++
 
 	// Store updated count
-	if err := p.store.Set(k, count); err != nil {
+	if err := p.store.Set(ctx, k, count); err != nil {
 		return fmt.Errorf("failed to set count: %w", err)
 	}
 
@@ -91,7 +89,7 @@ func (p *CountingProcessor) Process(ctx context.Context, k string, v string) err
 type SummingProcessor struct {
 	ctx       kprocessor.ProcessorContext[string, string]
 	storeName string
-	store     *kstate.KeyValueStore[string, int]
+	store     kstate.KeyValueStore[string, int]
 }
 
 func (p *SummingProcessor) Init(ctx kprocessor.ProcessorContext[string, string]) error {
@@ -101,7 +99,7 @@ func (p *SummingProcessor) Init(ctx kprocessor.ProcessorContext[string, string])
 		return fmt.Errorf("failed to get store: store not found")
 	}
 
-	kvStore, ok := store.(*kstate.KeyValueStore[string, int])
+	kvStore, ok := store.(kstate.KeyValueStore[string, int])
 	if !ok {
 		return fmt.Errorf("store is not a KeyValueStore[string, int]")
 	}
@@ -121,20 +119,19 @@ func (p *SummingProcessor) Process(ctx context.Context, k string, v string) erro
 	}
 
 	// Get current sum for this key
-	sum, err := p.store.Get(k)
+	sum, found, err := p.store.Get(ctx, k)
 	if err != nil {
-		if err == kstate.ErrKeyNotFound {
-			sum = 0
-		} else {
-			return fmt.Errorf("failed to get sum: %w", err)
-		}
+		return fmt.Errorf("failed to get sum: %w", err)
+	}
+	if !found {
+		sum = 0
 	}
 
 	// Add to sum
 	sum += val
 
 	// Store updated sum
-	if err := p.store.Set(k, sum); err != nil {
+	if err := p.store.Set(ctx, k, sum); err != nil {
 		return fmt.Errorf("failed to set sum: %w", err)
 	}
 

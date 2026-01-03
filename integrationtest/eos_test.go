@@ -890,11 +890,11 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 	stateDir := t.TempDir()
 	kdag.RegisterStore(
 		tb,
-		kdag.KVStore(
-			pebble.NewStoreBackend(stateDir),
-			kserde.String,
-			kserde.Int64,
-		),
+		pebble.NewKeyValueStoreBuilder[string, int64]("counts", stateDir).
+			WithSerdes(
+				kserde.StringSerializer, kserde.StringDeserializer,
+				kserde.Int64Serializer, kserde.Int64Deserializer,
+			),
 		"counts",
 	)
 	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
@@ -1065,11 +1065,11 @@ func TestEOSWithStateStore(t *testing.T) {
 	stateDir := t.TempDir()
 	kdag.RegisterStore(
 		tb,
-		kdag.KVStore(
-			pebble.NewStoreBackend(stateDir),
-			kserde.String,
-			kserde.Int64,
-		),
+		pebble.NewKeyValueStoreBuilder[string, int64]("eos-counts", stateDir).
+			WithSerdes(
+				kserde.StringSerializer, kserde.StringDeserializer,
+				kserde.Int64Serializer, kserde.Int64Deserializer,
+			),
 		"eos-counts",
 	)
 	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
@@ -1353,7 +1353,7 @@ func (p *ErrorProneProcessor) Close() error {
 
 // EOSCountingProcessor - counting processor for EOS tests
 type EOSCountingProcessor struct {
-	store     *kstate.KeyValueStore[string, int64]
+	store     kstate.KeyValueStore[string, int64]
 	storeName string
 	ctx       kprocessor.ProcessorContext[string, int64]
 }
@@ -1366,20 +1366,21 @@ func newCountingProcessor(storeName string) kprocessor.ProcessorBuilder[string, 
 
 func (p *EOSCountingProcessor) Init(ctx kprocessor.ProcessorContext[string, int64]) error {
 	p.ctx = ctx
-	p.store = ctx.GetStore(p.storeName).(*kstate.KeyValueStore[string, int64])
+	p.store = ctx.GetStore(p.storeName).(kstate.KeyValueStore[string, int64])
 	return nil
 }
 
 func (p *EOSCountingProcessor) Process(ctx context.Context, k string, v string) error {
-	count, err := p.store.Get(k)
-	if err == kstate.ErrKeyNotFound {
-		count = 0
-	} else if err != nil {
+	count, found, err := p.store.Get(ctx, k)
+	if err != nil {
 		return err
+	}
+	if !found {
+		count = 0
 	}
 
 	count++
-	if err := p.store.Set(k, count); err != nil {
+	if err := p.store.Set(ctx, k, count); err != nil {
 		return err
 	}
 
