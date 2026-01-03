@@ -3,7 +3,6 @@ package integrationtest
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,6 @@ import (
 	"github.com/birdayz/kstreams"
 	"github.com/birdayz/kstreams/kdag"
 	"github.com/birdayz/kstreams/kserde"
-	"github.com/birdayz/kstreams/kstate/pebble"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
