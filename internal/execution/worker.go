@@ -103,7 +103,7 @@ func NewWorker(log *slog.Logger, name string, t *kdag.DAG, group string, brokers
 		stateDir: stateDir,
 	}
 
-	par := make(chan AssignedOrRevoked)
+	par := make(chan AssignedOrRevoked, 10) // Buffered to prevent deadlock with franz-go callbacks
 
 	topics := t.GetTopics()
 
