@@ -40,7 +40,7 @@ func TestChangelogBasic(t *testing.T) {
 	stateDir := filepath.Join(os.TempDir(), "kstreams-test-"+testID)
 
 	// Cleanup
-	defer os.RemoveAll(stateDir)
+	defer func() { _ = os.RemoveAll(stateDir) }()
 
 	// Create admin client to setup topics
 	adminClient, err := kgo.NewClient(kgo.SeedBrokers(broker))

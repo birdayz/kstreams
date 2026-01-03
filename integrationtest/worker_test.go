@@ -523,7 +523,7 @@ func TestWorkerRebalance(t *testing.T) {
 		// We can't guarantee exact distribution, but both should have some work
 		// Note: this assertion might be flaky depending on exact rebalance timing
 
-		app1.Close()
-		app2.Close()
+		_ = app1.Close()
+		_ = app2.Close()
 	})
 }

@@ -30,7 +30,7 @@ func TestExactlyOnceConfiguration(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -44,8 +44,8 @@ func TestExactlyOnceConfiguration(t *testing.T) {
 
 	// Build simple passthrough topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, inputTopic)
+	require.NoError(t, kstreams.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, inputTopic))
 	topology := tb.MustBuild()
 
 	// Create app with EOS enabled
@@ -67,7 +67,7 @@ func TestExactlyOnceConfiguration(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 
 	// Wait for app to finish
 	select {
@@ -89,7 +89,7 @@ func TestPassthroughNonEOS(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -106,14 +106,14 @@ func TestPassthroughNonEOS(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(
 		tb,
 		newPassthroughProcessor(),
 		"passthrough",
 		"source",
-	)
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	// Create app WITHOUT EOS
@@ -142,7 +142,7 @@ func TestPassthroughNonEOS(t *testing.T) {
 	}
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 	runErr := <-done
 	if runErr != nil {
 		t.Logf("App returned error: %v", runErr)
@@ -163,7 +163,7 @@ func TestTransactionalProduce(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -180,14 +180,14 @@ func TestTransactionalProduce(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(
 		tb,
 		newPassthroughProcessor(),
 		"passthrough",
 		"source",
-	)
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -217,7 +217,7 @@ func TestTransactionalProduce(t *testing.T) {
 	}
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 	runErr := <-done
 	if runErr != nil {
 		t.Logf("App returned error: %v", runErr)
@@ -238,7 +238,7 @@ func TestReadCommittedIsolation(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestTransactionAbortOnError(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -293,14 +293,14 @@ func TestTransactionAbortOnError(t *testing.T) {
 
 	// Build topology with error-prone processor
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(
+	require.NoError(t, kstreams.RegisterSource(tb, inputTopic, inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(
 		tb,
 		newErrorProneProcessor(),
 		"error-processor",
 		inputTopic,
-	)
-	kstreams.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, "error-processor")
+	))
+	require.NoError(t, kstreams.RegisterSink(tb, outputTopic, outputTopic, kserde.StringSerializer, kserde.StringSerializer, "error-processor"))
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -323,7 +323,7 @@ func TestTransactionAbortOnError(t *testing.T) {
 	case err := <-done:
 		assert.Error(t, err, "app should fail due to processing error")
 	case <-time.After(10 * time.Second):
-		app.Close()
+		_ = app.Close()
 		t.Fatal("expected app to fail but it didn't")
 	}
 
@@ -343,7 +343,7 @@ func TestEOSCrashBeforeCommit(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -360,7 +360,7 @@ func TestEOSCrashBeforeCommit(t *testing.T) {
 
 	// Build topology with crash processor that crashes after 50 records
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
 
 	crashAfter := 50
 	processedCount := 0
@@ -371,8 +371,8 @@ func TestEOSCrashBeforeCommit(t *testing.T) {
 		}
 	}
 
-	kstreams.RegisterProcessor(tb, crashProcessor, "crash-processor", "source")
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "crash-processor")
+	require.NoError(t, kstreams.RegisterProcessor(tb, crashProcessor, "crash-processor", "source"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "crash-processor"))
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -396,7 +396,7 @@ func TestEOSCrashBeforeCommit(t *testing.T) {
 		t.Logf("App crashed as expected: %v", err)
 		assert.Error(t, err, "app should crash")
 	case <-time.After(10 * time.Second):
-		app.Close()
+		_ = app.Close()
 		<-done
 		t.Fatal("app should have crashed")
 	}
@@ -420,7 +420,7 @@ func TestEOSCrashAfterCommit(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -437,9 +437,9 @@ func TestEOSCrashAfterCommit(t *testing.T) {
 
 	// Build simple passthrough topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	// Use same group name for both runs to demonstrate offset behavior
@@ -474,7 +474,7 @@ func TestEOSCrashAfterCommit(t *testing.T) {
 
 	// Force close WITHOUT waiting for graceful shutdown (simulates crash)
 	// This may leave offsets uncommitted even though transaction was committed
-	app1.Close()
+	_ = app1.Close()
 	<-done1
 
 	// Run 2: Same consumer group, should resume from last committed offset
@@ -494,7 +494,7 @@ func TestEOSCrashAfterCommit(t *testing.T) {
 
 	// Wait for potential reprocessing
 	time.Sleep(5 * time.Second)
-	app2.Close()
+	_ = app2.Close()
 	<-done2
 
 	// Count total output records
@@ -517,7 +517,7 @@ func TestEOSMultiplePartitions(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -553,9 +553,9 @@ func TestEOSMultiplePartitions(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	// Create app with 3 workers (one per partition)
@@ -585,7 +585,7 @@ func TestEOSMultiplePartitions(t *testing.T) {
 	}
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 	runErr := <-done
 	if runErr != nil {
 		t.Logf("App returned error: %v", runErr)
@@ -606,7 +606,7 @@ func TestEOSMultipleOutputTopics(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -635,16 +635,16 @@ func TestEOSMultipleOutputTopics(t *testing.T) {
 
 	// Build topology that writes to TWO output topics
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
 
 	// Processor that forwards to two different sinks
 	dualForwarder := func() kprocessor.Processor[string, string, string, string] {
 		return &DualForwardProcessor{}
 	}
-	kstreams.RegisterProcessor(tb, dualForwarder, "dual-forwarder", "source")
+	require.NoError(t, kstreams.RegisterProcessor(tb, dualForwarder, "dual-forwarder", "source"))
 
-	kstreams.RegisterSink(tb, "sink1", outputTopic1, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder")
-	kstreams.RegisterSink(tb, "sink2", outputTopic2, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder")
+	require.NoError(t, kstreams.RegisterSink(tb, "sink1", outputTopic1, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink2", outputTopic2, kserde.StringSerializer, kserde.StringSerializer, "dual-forwarder"))
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -666,7 +666,7 @@ func TestEOSMultipleOutputTopics(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 	<-done
 
 	// Verify BOTH topics have records (atomicity across topics)
@@ -692,7 +692,7 @@ func TestEOSProducerFencing(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -709,9 +709,9 @@ func TestEOSProducerFencing(t *testing.T) {
 
 	// Build topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	// SAME group name for both apps (simulates zombie)
@@ -758,8 +758,8 @@ func TestEOSProducerFencing(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Close both
-	app1.Close()
-	app2.Close()
+	_ = app1.Close()
+	_ = app2.Close()
 	err1 := <-done1
 	err2 := <-done2
 
@@ -787,7 +787,7 @@ func TestEOSLargeBatch(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -817,9 +817,9 @@ func TestEOSLargeBatch(t *testing.T) {
 
 	// Build passthrough topology
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -852,7 +852,7 @@ func TestEOSLargeBatch(t *testing.T) {
 	}
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 	<-done
 
 	// Verify exactly 10k records
@@ -870,7 +870,7 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -888,7 +888,7 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 	// Build topology with state store
 	tb := kdag.NewBuilder()
 	stateDir := t.TempDir()
-	kdag.RegisterStore(
+	require.NoError(t, kdag.RegisterStore(
 		tb,
 		pebble.NewKeyValueStoreBuilder[string, int64]("counts", stateDir).
 			WithSerdes(
@@ -896,16 +896,16 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 				kserde.Int64Serializer, kserde.Int64Deserializer,
 			),
 		"counts",
-	)
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(
+	))
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(
 		tb,
 		newCountingProcessor("counts"),
 		"counter",
 		"source",
 		"counts",
-	)
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter")
+	))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter"))
 	topology := tb.MustBuild()
 
 	// Run 1: Process with EOS
@@ -925,7 +925,7 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 
 	// Wait for processing
 	time.Sleep(5 * time.Second)
-	app1.Close()
+	_ = app1.Close()
 	<-done1
 
 	outputCount1 := countRecordsInTopic(t, brokers, outputTopic)
@@ -946,7 +946,7 @@ func TestEOSStateStoreTransactionCoordination(t *testing.T) {
 	}()
 
 	time.Sleep(3 * time.Second)
-	app2.Close()
+	_ = app2.Close()
 	<-done2
 
 	outputCount2 := countRecordsInTopic(t, brokers, outputTopic)
@@ -969,7 +969,7 @@ func TestEOSMixedProducers(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -998,9 +998,9 @@ func TestEOSMixedProducers(t *testing.T) {
 
 	// EOS consumer reads and processes
 	tb := kdag.NewBuilder()
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source")
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough")
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(tb, newPassthroughProcessor(), "passthrough", "source"))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.StringSerializer, "passthrough"))
 	topology := tb.MustBuild()
 
 	app := kstreams.MustNew(
@@ -1026,7 +1026,7 @@ func TestEOSMixedProducers(t *testing.T) {
 		}
 	}
 
-	app.Close()
+	_ = app.Close()
 	<-done
 
 	// EOS consumer should handle non-EOS input fine
@@ -1045,7 +1045,7 @@ func TestEOSWithStateStore(t *testing.T) {
 	// Start Redpanda
 	redpandaContainer, err := redpanda.RunContainer(ctx)
 	require.NoError(t, err)
-	defer redpandaContainer.Terminate(ctx)
+	defer func() { _ = redpandaContainer.Terminate(ctx) }()
 
 	bootstrapServer, err := redpandaContainer.KafkaSeedBroker(ctx)
 	require.NoError(t, err)
@@ -1063,7 +1063,7 @@ func TestEOSWithStateStore(t *testing.T) {
 	// Build topology with state store
 	tb := kdag.NewBuilder()
 	stateDir := t.TempDir()
-	kdag.RegisterStore(
+	require.NoError(t, kdag.RegisterStore(
 		tb,
 		pebble.NewKeyValueStoreBuilder[string, int64]("eos-counts", stateDir).
 			WithSerdes(
@@ -1071,16 +1071,16 @@ func TestEOSWithStateStore(t *testing.T) {
 				kserde.Int64Serializer, kserde.Int64Deserializer,
 			),
 		"eos-counts",
-	)
-	kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterProcessor(
+	))
+	require.NoError(t, kstreams.RegisterSource(tb, "source", inputTopic, kserde.StringDeserializer, kserde.StringDeserializer))
+	require.NoError(t, kstreams.RegisterProcessor(
 		tb,
 		newCountingProcessor("eos-counts"),
 		"counter",
 		"source",
 		"eos-counts",
-	)
-	kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter")
+	))
+	require.NoError(t, kstreams.RegisterSink(tb, "sink", outputTopic, kserde.StringSerializer, kserde.Int64Serializer, "counter"))
 	topology := tb.MustBuild()
 
 	// Create app with EOS
@@ -1110,7 +1110,7 @@ func TestEOSWithStateStore(t *testing.T) {
 	}
 
 	// Close app
-	app.Close()
+	_ = app.Close()
 	runErr := <-done
 	if runErr != nil {
 		t.Logf("App returned error: %v", runErr)

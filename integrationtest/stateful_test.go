@@ -138,7 +138,7 @@ func TestStatefulAggregation(t *testing.T) {
 	t.Run("count by key", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -156,10 +156,10 @@ func TestStatefulAggregation(t *testing.T) {
 		kstreams.RegisterSource(topo, "source", "count-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register state store for counting
-		kdag.RegisterStore(topo,
+		assert.NoError(t, kdag.RegisterStore(topo,
 			pebble.NewKeyValueStoreBuilder[string, int]("counts", stateDir).
 				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
-			"counts")
+			"counts"))
 
 		// Register counting processor
 		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
@@ -241,7 +241,7 @@ func TestStatefulAggregation(t *testing.T) {
 	t.Run("sum by key", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -257,10 +257,10 @@ func TestStatefulAggregation(t *testing.T) {
 		kstreams.RegisterSource(topo, "source", "sum-input", kserde.StringDeserializer, kserde.StringDeserializer)
 
 		// Register state store for summing
-		kdag.RegisterStore(topo,
+		assert.NoError(t, kdag.RegisterStore(topo,
 			pebble.NewKeyValueStoreBuilder[string, int]("sums", stateDir).
 				WithSerdes(kserde.StringSerializer, kserde.StringDeserializer, intSerializer, intDeserializer),
-			"sums")
+			"sums"))
 
 		// Register summing processor
 		kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
@@ -344,7 +344,7 @@ func TestStatePersistence(t *testing.T) {
 	t.Run("state persists across restarts", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -519,7 +519,7 @@ func TestStoreFlush(t *testing.T) {
 	t.Run("flush writes state to disk", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -609,7 +609,7 @@ func TestMultipleStores(t *testing.T) {
 	t.Run("processor with multiple state stores", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)

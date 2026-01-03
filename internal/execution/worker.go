@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/birdayz/kstreams/internal/coordination"
@@ -34,7 +35,8 @@ type Worker struct {
 
 	state RoutineState
 
-	assignedOrRevoked chan AssignedOrRevoked
+	pendingPartitionEvent  atomic.Pointer[AssignedOrRevoked]
+	partitionEventNotify   chan struct{} // Signals when pendingPartitionEvent is set
 
 	newlyAssigned map[string][]int32
 	newlyRevoked  map[string][]int32
@@ -103,22 +105,60 @@ func NewWorker(log *slog.Logger, name string, t *kdag.DAG, group string, brokers
 		stateDir: stateDir,
 	}
 
-	par := make(chan AssignedOrRevoked, 10) // Buffered to prevent deadlock with franz-go callbacks
+	// Default to fail-fast error handler if none specified
+	errorHandler := cfg.ErrorHandler
+	if errorHandler == nil {
+		errorHandler = DefaultErrorHandler()
+	}
+
+	// Default shutdown timeout
+	shutdownTimeout := cfg.ShutdownTimeout
+	if shutdownTimeout <= 0 {
+		shutdownTimeout = DefaultShutdownTimeout
+	}
+
+	// Create worker first so callbacks can reference it
+	w := &Worker{
+		name:                 name,
+		log:                  log.With("worker", name),
+		group:                group,
+		t:                    t,
+		state:                StateCreated,
+		partitionEventNotify: make(chan struct{}, 1), // Buffered to prevent blocking
+		closeRequested:       make(chan struct{}, 1),
+		maxPollRecords:       cfg.MaxPollRecords,
+		taskManager:          tm,
+		commitInterval:       commitInterval,
+		appID:                appID,
+		stateDir:             stateDir,
+		pollTimeout:          cfg.PollTimeout,
+		recordProcessTimeout: cfg.RecordProcessTimeout,
+		errorHandler:         errorHandler,
+		dlqTopic:             cfg.DLQTopic,
+		shutdownTimeout:      shutdownTimeout,
+	}
 
 	topics := t.GetTopics()
 
-	// Consumer configuration
+	// Consumer configuration with non-blocking callbacks
+	// Callbacks store event atomically and cancel poll to wake up worker
 	consumerOpts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
 		kgo.Balancers(coordination.NewPartitionGroupBalancer(log, t.GetPartitionGroups())),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeTopics(topics...),
-		kgo.OnPartitionsAssigned(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
-			par <- AssignedOrRevoked{Assigned: m}
+		kgo.OnPartitionsAssigned(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
+			event := &AssignedOrRevoked{Assigned: m}
+			w.pendingPartitionEvent.Store(event)
+			w.notifyPartitionEvent()
+			w.cancelCurrentPoll()
 		}),
-		kgo.OnPartitionsRevoked(func(c1 context.Context, c2 *kgo.Client, m map[string][]int32) {
-			par <- AssignedOrRevoked{Revoked: m}
+		kgo.OnPartitionsRevoked(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
+			event := &AssignedOrRevoked{Revoked: m}
+			w.pendingPartitionEvent.Store(event)
+			w.notifyPartitionEvent()
+			w.cancelCurrentPoll()
 		}),
 	}
 
@@ -157,44 +197,31 @@ func NewWorker(log *slog.Logger, name string, t *kdag.DAG, group string, brokers
 		coordinator = NewAtLeastOnceCoordinator(client, tm, log)
 	}
 
+	// Fill in coordinator-dependent fields
+	w.coordinator = coordinator
+	w.adminClient = kadm.NewClient(coordinator.Client())
 	tm.client = coordinator.Client()
-
-	// Default to fail-fast error handler if none specified
-	errorHandler := cfg.ErrorHandler
-	if errorHandler == nil {
-		errorHandler = DefaultErrorHandler()
-	}
-
-	// Default shutdown timeout
-	shutdownTimeout := cfg.ShutdownTimeout
-	if shutdownTimeout <= 0 {
-		shutdownTimeout = DefaultShutdownTimeout
-	}
-
-	w := &Worker{
-		name:                 name,
-		log:                  log.With("worker", name),
-		group:                group,
-		coordinator:          coordinator,
-		adminClient:          kadm.NewClient(coordinator.Client()),
-		t:                    t,
-		state:                StateCreated,
-		assignedOrRevoked:    par,
-		closeRequested:       make(chan struct{}, 1),
-		maxPollRecords:       cfg.MaxPollRecords,
-		taskManager:          tm,
-		commitInterval:       commitInterval,
-		appID:                appID,
-		stateDir:             stateDir,
-		pollTimeout:          cfg.PollTimeout,
-		recordProcessTimeout: cfg.RecordProcessTimeout,
-		errorHandler:         errorHandler,
-		dlqTopic:             cfg.DLQTopic,
-		shutdownTimeout:      shutdownTimeout,
-	}
 
 	w.closed.Add(1)
 	return w, nil
+}
+
+// cancelCurrentPoll safely cancels any in-flight poll operation
+func (r *Worker) cancelCurrentPoll() {
+	r.cancelPollMtx.Lock()
+	if r.cancelPoll != nil {
+		r.cancelPoll()
+	}
+	r.cancelPollMtx.Unlock()
+}
+
+// notifyPartitionEvent signals that a partition event is pending (non-blocking)
+func (r *Worker) notifyPartitionEvent() {
+	select {
+	case r.partitionEventNotify <- struct{}{}:
+	default:
+		// Already notified, no need to send again
+	}
 }
 
 func (r *Worker) changeState(newState RoutineState) {

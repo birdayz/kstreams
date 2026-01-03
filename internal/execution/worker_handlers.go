@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -12,10 +11,14 @@ import (
 
 func (r *Worker) handleCreated() {
 	select {
-	case assignments := <-r.assignedOrRevoked:
-		r.newlyAssigned = assignments.Assigned
-		r.newlyRevoked = assignments.Revoked
-		r.changeState(StatePartitionsAssigned)
+	case <-r.partitionEventNotify:
+		// Check atomic for the actual event data
+		if event := r.pendingPartitionEvent.Swap(nil); event != nil {
+			r.newlyAssigned = event.Assigned
+			r.newlyRevoked = event.Revoked
+			r.changeState(StatePartitionsAssigned)
+		}
+		// If event was nil (consumed elsewhere), just loop again
 	case <-r.closeRequested:
 		r.changeState(StateCloseRequested)
 	}
@@ -49,14 +52,13 @@ func (r *Worker) handlePartitionsAssigned() {
 func (r *Worker) handleRunning() {
 	r.cancelPollMtx.Lock()
 
-	select {
-	case ev := <-r.assignedOrRevoked:
-		r.newlyAssigned = ev.Assigned
-		r.newlyRevoked = ev.Revoked
+	// Check for pending partition event (non-blocking via atomic)
+	if event := r.pendingPartitionEvent.Swap(nil); event != nil {
+		r.newlyAssigned = event.Assigned
+		r.newlyRevoked = event.Revoked
 		r.changeState(StatePartitionsAssigned)
 		r.cancelPollMtx.Unlock()
 		return
-	default:
 	}
 
 	select {
@@ -203,15 +205,6 @@ func (r *Worker) handleRunning() {
 }
 
 func (r *Worker) handleCloseRequested() {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	go func() {
-		for range r.assignedOrRevoked {
-		}
-		wg.Done()
-	}()
-
 	// Use timeout context for graceful shutdown
 	closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -224,8 +217,6 @@ func (r *Worker) handleCloseRequested() {
 	// Close coordinator (handles both EOS and at-least-once cleanup)
 	r.coordinator.Close()
 
-	close(r.assignedOrRevoked) // Can close this only after client is closed, as the client writes to that channel
-	wg.Wait()
 	r.changeState(StateClosed)
 }
 

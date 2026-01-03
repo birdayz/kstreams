@@ -39,7 +39,7 @@ const partitionsCount = 1
 func BenchmarkConsume(b *testing.B) {
 	broker := &RedpandaBroker{RedpandaVersion: "latest"}
 	assert.NoError(b, broker.Init())
-	defer broker.Close()
+	defer func() { _ = broker.Close() }()
 
 	//brokers := "localhost:9092"
 	brokers := broker.BootstrapServers()[0]
@@ -52,8 +52,8 @@ func BenchmarkConsume(b *testing.B) {
 	assert.NoError(b, err)
 
 	topology := kdag.NewBuilder()
-	kstreams.RegisterSource(topology, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
-	kstreams.RegisterSink(topology, "sink", "sink", kserde.StringSerializer, kserde.StringSerializer, "source")
+	assert.NoError(b, kstreams.RegisterSource(topology, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer))
+	assert.NoError(b, kstreams.RegisterSink(topology, "sink", "sink", kserde.StringSerializer, kserde.StringSerializer, "source"))
 	kstr := kstreams.MustNew(topology.MustBuild(), "bench", kstreams.WithBrokers([]string{brokers}))
 
 	go func() { assert.NoError(b, kstr.Run()) }()

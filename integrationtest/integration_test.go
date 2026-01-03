@@ -119,7 +119,7 @@ func TestWithSimpleProcessor(t *testing.T) {
 	for _, broker := range brokers {
 		t.Run(broker.name, func(t *testing.T) {
 			assert.NoError(t, broker.broker.Init())
-			defer broker.broker.Close()
+			defer func() { _ = broker.broker.Close() }()
 
 			kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.broker.BootstrapServers()...))
 			assert.NoError(t, err)
@@ -130,14 +130,14 @@ func TestWithSimpleProcessor(t *testing.T) {
 			assert.NoError(t, err)
 
 			topo := kdag.NewBuilder()
-			kstreams.RegisterSource(topo, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer)
+			assert.NoError(t, kstreams.RegisterSource(topo, "source", "source", kserde.StringDeserializer, kserde.StringDeserializer))
 
 			out := make(chan [2]string, 1)
-			kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
+			assert.NoError(t, kstreams.RegisterProcessor(topo, func() kprocessor.Processor[string, string, string, string] {
 				return &SpyProcessor{
 					out: out,
 				}
-			}, "my-processor", "source")
+			}, "my-processor", "source"))
 
 			app := kstreams.MustNew(topo.MustBuild(), "test", kstreams.WithBrokers(broker.broker.BootstrapServers()), kstreams.WithLog(slog.Default()))
 			go func() {
@@ -158,7 +158,7 @@ func TestWithSimpleProcessor(t *testing.T) {
 				t.Fatal("timeout waiting for message")
 			}
 
-			app.Close()
+			_ = app.Close()
 		})
 	}
 }
@@ -171,7 +171,7 @@ func TestTransformationProcessor(t *testing.T) {
 	t.Run("uppercase transformation", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -226,7 +226,7 @@ func TestTransformationProcessor(t *testing.T) {
 	t.Run("value append transformation", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -283,7 +283,7 @@ func TestFilteringProcessor(t *testing.T) {
 	t.Run("filter by value length", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -366,7 +366,7 @@ func TestFilteringProcessor(t *testing.T) {
 	t.Run("filter by key prefix", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
@@ -451,7 +451,7 @@ func TestMultiProcessorChain(t *testing.T) {
 	t.Run("transform then filter chain", func(t *testing.T) {
 		broker := &RedpandaBroker{RedpandaVersion: "latest"}
 		assert.NoError(t, broker.Init())
-		defer broker.Close()
+		defer func() { _ = broker.Close() }()
 
 		kcl, err := kgo.NewClient(kgo.SeedBrokers(broker.BootstrapServers()...))
 		assert.NoError(t, err)
