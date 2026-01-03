@@ -26,6 +26,9 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install Just
+        uses: extractions/setup-just@v2
+
       - name: Cache golangci-lint
         uses: actions/cache@v4
         with:
@@ -39,7 +42,7 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
       - name: Run lint
-        run: golangci-lint run ./...
+        run: just lint
 
   test:
     name: Test
@@ -69,11 +72,14 @@ jobs:
             ${{ runner.os }}-testcache-
           save-always: true
 
+      - name: Install Just
+        uses: extractions/setup-just@v2
+
       - name: Run unit tests
         run: |
           # Unset CI-specific env vars that change between runs to enable test caching
           unset GITHUB_RUN_ID GITHUB_RUN_NUMBER GITHUB_RUN_ATTEMPT RUNNER_TRACKING_ID
-          go test -short ./...
+          just test-unit
 
   integration:
     name: Integration Tests
@@ -120,6 +126,9 @@ jobs:
             ${{ runner.os }}-integration-testcache-
           save-always: true
 
+      - name: Install Just
+        uses: extractions/setup-just@v2
+
       - name: Wait for Kafka
         run: |
           timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
@@ -127,4 +136,4 @@ jobs:
       - name: Run integration tests
         run: |
           unset GITHUB_RUN_ID GITHUB_RUN_NUMBER GITHUB_RUN_ATTEMPT RUNNER_TRACKING_ID
-          go test -v ./integrationtest/...
+          just test-integration
